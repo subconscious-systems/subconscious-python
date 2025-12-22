@@ -2,7 +2,7 @@
   <img src="https://www.subconscious.dev/logo.svg" alt="Subconscious" width="64" height="64">
 </p>
 
-<h1 align="center">Subconscious Python SDK</h1>
+<h1 align="center">Subconscious SDK</h1>
 
 <p align="center">
   The official Python SDK for the <a href="https://subconscious.dev">Subconscious API</a>
@@ -20,130 +20,237 @@
 
 ## Installation
 
-Install the package using pip:
-
 ```bash
 pip install subconscious-python
+# or
+uv add subconscious-python
+# or
+poetry add subconscious-python
 ```
 
-> **Note**: The package name is `subconscious-python` but you import it as `subconscious`:
-> ```python
-> import subconscious  # Import name remains clean and simple
-> ```
-
-For development installation:
-
-```bash
-pip install -e .
-```
+> **Note**: The package name is `subconscious-python` but you import it as `subconscious`.
 
 ## Quick Start
 
 ```python
-from subconscious import Client
+from subconscious import Subconscious
 
-# Initialize the client
-client = Client(
-    base_url="https://api.subconscious.dev/v1", # can be omitted
-    api_key="your-api-key" # get it from https://subconscious.dev
+client = Subconscious(api_key="your-api-key")
+
+run = client.run(
+    engine="tim-large",
+    input={
+        "instructions": "Search for the latest AI news and summarize the top 3 stories",
+        "tools": [{"type": "platform", "id": "parallel_search"}],
+    },
+    options={"await_completion": True},
 )
 
-# Define tools
-tools = [
-    {
-        "type": "function",
-        "name": "calculator",
-        "url": "https://URL_TO_CALCULATOR_TOOL/ENDPOINT", # the server url of your own tool
-        "method": "POST",
-        "timeout": 5, # seconds
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "operation": {"type": "string"},
-                "a": {"type": "number"},
-                "b": {"type": "number"}
-            },
-            "required": ["operation", "a", "b"]
-        }
-    }
-]
-
-# Build toolkit
-client.build_toolkit(tools, agent_name="math_agent")
-
-# Run agent
-messages = [{"role": "user", "content": "What is 2 + 3?"}]
-response = client.agent.run(messages, agent_name="math_agent")
-print(response)
+print(run.result.answer)
 ```
 
-The TIM language model will call the `calculator` tool as many times as necessary, handle excepts, compute the answer, and return the result. The agent is completed with one language model API call!
+## Get Your API Key
 
-We also provide fine-grained control over the reasoning structure, tool use, and memory management. Check out the [deep research agent example](https://github.com/subconscious-systems/TIMRUN/tree/main/examples/deep_research) for more advanced usage.
+Create an API key in the [Subconscious dashboard](https://www.subconscious.dev/platform).
 
-## Features
+## Usage
 
-- **Structured Reasoning**: Define complex reasoning patterns with hierarchical task structures
-- **Tool Integration**: Seamlessly integrate external tools and APIs
-- **Type Safety**: Full Pydantic integration for robust type checking
-- **Streaming Support**: Real-time streaming responses
-- **Grammar-Based Parsing**: Advanced grammar-driven response formatting
+### Run and Wait
+
+The simplest way to use the SDK—create a run and wait for completion:
+
+```python
+run = client.run(
+    engine="tim-large",
+    input={
+        "instructions": "Analyze the latest trends in renewable energy",
+        "tools": [{"type": "platform", "id": "parallel_search"}],
+    },
+    options={"await_completion": True},
+)
+
+print(run.result.answer)
+print(run.result.reasoning)  # Structured reasoning nodes
+```
+
+### Fire and Forget
+
+Start a run without waiting, then check status later:
+
+```python
+run = client.run(
+    engine="tim-large",
+    input={
+        "instructions": "Generate a comprehensive report",
+        "tools": [],
+    },
+)
+
+print(f"Run started: {run.run_id}")
+
+# Check status later
+status = client.get(run.run_id)
+print(status.status)  # 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled' | 'timed_out'
+```
+
+### Poll with Custom Options
+
+```python
+run = client.run(
+    engine="tim-large",
+    input={
+        "instructions": "Complex task",
+        "tools": [{"type": "platform", "id": "parallel_search"}],
+    },
+)
+
+# Wait with custom polling options
+result = client.wait(
+    run.run_id,
+    options={
+        "interval_ms": 2000,  # Poll every 2 seconds
+        "max_attempts": 60,   # Give up after 60 attempts
+    },
+)
+```
+
+### Streaming (Text Deltas)
+
+Stream text as it's generated:
+
+```python
+for event in client.stream(
+    engine="tim-large",
+    input={
+        "instructions": "Write a short essay about space exploration",
+        "tools": [{"type": "platform", "id": "parallel_search"}],
+    },
+):
+    if event.type == "delta":
+        print(event.content, end="", flush=True)
+    elif event.type == "done":
+        print(f"\n\nRun completed: {event.run_id}")
+    elif event.type == "error":
+        print(f"Error: {event.message}")
+```
+
+> **Note**: Rich streaming events (reasoning steps, tool calls) are coming soon. Currently, the stream provides text deltas as they're generated.
+
+### Tools
+
+```python
+# Platform tools (hosted by Subconscious)
+parallel_search = {
+    "type": "platform",
+    "id": "parallel_search",
+}
+
+# Function tools (your own functions)
+custom_function = {
+    "type": "function",
+    "name": "get_weather",
+    "description": "Get current weather for a location",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "location": {"type": "string"},
+        },
+        "required": ["location"],
+    },
+    "url": "https://api.example.com/weather",
+    "method": "GET",
+    "timeout": 30,
+}
+
+# MCP tools
+mcp_tool = {
+    "type": "mcp",
+    "url": "https://mcp.example.com",
+    "allow": ["read", "write"],
+}
+```
+
+### Error Handling
+
+```python
+from subconscious import (
+    Subconscious,
+    SubconsciousError,
+    AuthenticationError,
+    RateLimitError,
+)
+
+try:
+    run = client.run(...)
+except AuthenticationError:
+    print("Invalid API key")
+except RateLimitError:
+    print("Rate limited, retry later")
+except SubconsciousError as e:
+    print(f"API error: {e.code} - {e}")
+```
+
+### Cancellation
+
+```python
+# Cancel a running run
+client.cancel(run.run_id)
+```
 
 ## API Reference
 
-### Client
+### `Subconscious`
 
-Main client class for interacting with the Subconscious API.
+The main client class.
 
-```python
-client = Client(base_url="https://api.subconscious.dev", api_key="your-api-key")
-```
+#### Constructor Options
 
-### Agent
+| Option     | Type   | Required | Default                           |
+| ---------- | ------ | -------- | --------------------------------- |
+| `api_key`  | `str`  | Yes      | -                                 |
+| `base_url` | `str`  | No       | `https://api.subconscious.dev/v1` |
 
-Core agent functionality for parsing and running structured reasoning tasks.
+#### Methods
 
-```python
-response = client.agent.parse(messages, model="tim-large", tools=tools)
-response = client.agent.run(messages, agent_name="default", thread_name="default")
-```
+| Method                      | Description              |
+| --------------------------- | ------------------------ |
+| `run(engine, input, options)` | Create a new run       |
+| `stream(engine, input)`     | Stream text deltas       |
+| `get(run_id)`               | Get run status           |
+| `wait(run_id, options)`     | Poll until completion    |
+| `cancel(run_id)`            | Cancel a running run     |
 
-### Tools and Tasks
+### Engines
 
-Create custom tools and task structures:
+| Engine              | Type     | Availability | Description                                                       |
+| ------------------- | -------- | ------------ | ----------------------------------------------------------------- |
+| `tim-small-preview` | Unified  | Available    | Fast and tuned for search tasks                                   |
+| `tim-large`         | Compound | Available    | Generalized reasoning engine backed by the power of OpenAI        |
+| `timini`            | Compound | Coming soon  | Generalized reasoning engine backed by the power of Google Gemini |
 
-```python
-# Build a toolkit
-client.build_toolkit(tools, agent_name="my_agent")
+### Run Status
 
-# Create custom tasks
-task = client.create_task(
-    task_name="analysis",
-    agent_name="my_agent",
-    thought="Analyze the data",
-    tools=("tool1", "tool2")
-)
-
-# Create custom threads
-thread = client.create_thread(
-    reasoning_model=MyReasoningModel,
-    answer_model=str,
-    agent_name="my_agent",
-    thread_name="custom"
-)
-```
+| Status      | Description            |
+| ----------- | ---------------------- |
+| `queued`    | Waiting to start       |
+| `running`   | Currently executing    |
+| `succeeded` | Completed successfully |
+| `failed`    | Encountered an error   |
+| `canceled`  | Manually canceled      |
+| `timed_out` | Exceeded time limit    |
 
 ## Requirements
 
-- Python 3.8+
-- pydantic>=2.0.0
-- openai>=1.0.0
-- requests>=2.25.0
-- pyhumps>=3.0.0
+- Python ≥ 3.8
+- requests
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a pull request.
 
 ## License
 
-MIT License - see LICENSE file for details.
+ISC
 
 ## Support
 

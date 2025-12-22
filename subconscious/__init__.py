@@ -1,29 +1,77 @@
 """
 Subconscious Python SDK
 
-A Python SDK for the Subconscious AI agent framework, providing structured reasoning
-and tool integration capabilities.
+The official Python SDK for the Subconscious API.
 """
 
-from .client import Client, Agent, ToolKit, TaskManager, ThreadManager
-from .grammar import Tool, Task, BaseTask, create_thread_grammar
-from .tim_api import TIMResponse, tim_streaming
+from .client import Subconscious
+from .types import (
+    # Run types
+    Run,
+    RunStatus,
+    RunResult,
+    RunInput,
+    RunOptions,
+    RunParams,
+    ReasoningNode,
+    Engine,
+    Usage,
+    ModelUsage,
+    PlatformToolUsage,
+    PollOptions,
+    # Tool types
+    Tool,
+    PlatformTool,
+    FunctionTool,
+    MCPTool,
+    # Stream events
+    StreamEvent,
+    DeltaEvent,
+    DoneEvent,
+    ErrorEvent,
+)
+from .errors import (
+    SubconsciousError,
+    AuthenticationError,
+    RateLimitError,
+    NotFoundError,
+    ValidationError,
+)
 
-__version__ = "0.1.21"
+__version__ = "0.2.0"
 __author__ = "Subconscious Systems"
 __email__ = "contact@subconscious.dev"
 
 __all__ = [
-    "Client",
-    "Agent", 
-    "ToolKit",
-    "TaskManager",
-    "ThreadManager",
+    # Client
+    "Subconscious",
+    # Run types
+    "Run",
+    "RunStatus",
+    "RunResult",
+    "RunInput",
+    "RunOptions",
+    "RunParams",
+    "ReasoningNode",
+    "Engine",
+    "Usage",
+    "ModelUsage",
+    "PlatformToolUsage",
+    "PollOptions",
+    # Tool types
     "Tool",
-    "Task", 
-    "BaseTask",
-    "create_thread_grammar",
-    "TIMResponse",
-    "tim_streaming",
+    "PlatformTool",
+    "FunctionTool",
+    "MCPTool",
+    # Stream events
+    "StreamEvent",
+    "DeltaEvent",
+    "DoneEvent",
+    "ErrorEvent",
+    # Errors
+    "SubconsciousError",
+    "AuthenticationError",
+    "RateLimitError",
+    "NotFoundError",
+    "ValidationError",
 ]
-
