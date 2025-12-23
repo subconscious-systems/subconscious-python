@@ -8,10 +8,10 @@ version = "0.1.1"
 description = "The official Python SDK for the Subconscious API"
 readme = "README.md"
 authors = [
-    {name = "Hongyin Luo", email = "hongyin@subconscious.dev"}
+    {name = "Hongyin Luo", email = "hongyin@subconscious.dev"},
     {name = "Jack O'Brien", email = "jack@subconscious.dev"}
 ]
-license = "ISC"
+license = { text = "ISC" }
 requires-python = ">=3.8"
 classifiers = [
     "Development Status :: 4 - Beta",
