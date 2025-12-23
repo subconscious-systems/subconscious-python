@@ -11,7 +11,7 @@ authors = [
     {name = "Hongyin Luo", email = "hongyin@subconscious.dev"},
     {name = "Jack O'Brien", email = "jack@subconscious.dev"}
 ]
-license = { text = "ISC" }
+license = { text = "Apache-2.0" }
 requires-python = ">=3.8"
 classifiers = [
     "Development Status :: 4 - Beta",
