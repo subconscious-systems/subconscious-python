@@ -29,6 +29,9 @@ from .types import (
     DeltaEvent,
     DoneEvent,
     ErrorEvent,
+    # Structured output
+    OutputSchema,
+    pydantic_to_schema,
 )
 from .errors import (
     SubconsciousError,
@@ -68,6 +71,9 @@ __all__ = [
     "DeltaEvent",
     "DoneEvent",
     "ErrorEvent",
+    # Structured output
+    "OutputSchema",
+    "pydantic_to_schema",
     # Errors
     "SubconsciousError",
     "AuthenticationError",

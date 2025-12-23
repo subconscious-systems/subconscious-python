@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "subconscious-sdk"
-version = "0.1.3"
+version = "0.1.5"
 description = "The official Python SDK for the Subconscious API"
 readme = "README.md"
 authors = [

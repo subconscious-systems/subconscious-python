@@ -6,6 +6,55 @@ from dataclasses import dataclass, field
 # Engine types
 Engine = Literal["tim-small-preview", "tim-large", "timini"]
 
+
+# JSON Schema types for structured output
+class OutputSchema(Dict[str, Any]):
+    """
+    JSON Schema for structured output format.
+    
+    Expected structure:
+    - $defs: Optional definitions for complex types
+    - properties: Dict of property names to their JSON Schema definitions
+    - required: List of required property names
+    - title: Title for the schema
+    - type: "object"
+    
+    Use pydantic_to_schema() to convert a Pydantic model to this format.
+    """
+    pass
+
+
+def pydantic_to_schema(model: type, title: Optional[str] = None) -> OutputSchema:
+    """
+    Convert a Pydantic model to the JSON Schema format expected by Subconscious.
+    
+    Note: You typically don't need to call this directly. The SDK automatically
+    converts Pydantic models passed to answerFormat/reasoningFormat.
+    
+    Args:
+        model: A Pydantic BaseModel class
+        title: Optional title override (defaults to model class name)
+    
+    Returns:
+        An OutputSchema compatible with answerFormat/reasoningFormat
+    """
+    # Get the JSON Schema from Pydantic
+    schema = model.model_json_schema()
+    
+    # Create the output schema
+    result = OutputSchema({
+        "type": "object",
+        "title": title or schema.get("title", model.__name__),
+        "properties": schema.get("properties", {}),
+        "required": schema.get("required", list(schema.get("properties", {}).keys())),
+    })
+    
+    # Include $defs if present (for complex nested types)
+    if "$defs" in schema:
+        result["$defs"] = schema["$defs"]
+    
+    return result
+
 # Run status types
 RunStatus = Literal["queued", "running", "succeeded", "failed", "canceled", "timed_out"]
 
@@ -107,6 +156,10 @@ class RunInput:
 
     instructions: str
     tools: List[Tool] = field(default_factory=list)
+    answer_format: Optional[OutputSchema] = None
+    """JSON Schema for the answer output format. Use pydantic_to_schema() to generate from Pydantic."""
+    reasoning_format: Optional[OutputSchema] = None
+    """JSON Schema for the reasoning output format. Use pydantic_to_schema() to generate from Pydantic."""
 
 
 @dataclass

@@ -136,6 +136,39 @@ for event in client.stream(
 
 > **Note**: Rich streaming events (reasoning steps, tool calls) are coming soon. Currently, the stream provides text deltas as they're generated.
 
+### Structured Output
+
+Get responses in a specific JSON schema format using Pydantic models:
+
+```python
+from pydantic import BaseModel
+from subconscious import Subconscious
+
+class AnalysisResult(BaseModel):
+    summary: str
+    key_points: list[str]
+    sentiment: str
+
+client = Subconscious(api_key="your-api-key")
+
+run = client.run(
+    engine="tim-large",
+    input={
+        "instructions": "Analyze the latest news about electric vehicles",
+        "tools": [{"type": "platform", "id": "parallel_search"}],
+        "answerFormat": AnalysisResult,  # Pass the Pydantic class directly
+    },
+    options={"await_completion": True},
+)
+
+# The answer will conform to your schema
+print(run.result.answer)  # JSON string matching AnalysisResult
+```
+
+The SDK automatically converts your Pydantic model to JSON Schema. You can also pass a raw JSON Schema dict if preferred.
+
+For advanced use cases, you can also specify a `reasoningFormat` to structure the agent's reasoning output.
+
 ### Tools
 
 ```python

@@ -24,6 +24,30 @@ from .types import (
     Usage,
 )
 
+
+def _resolve_schema(schema: Any) -> Optional[Dict[str, Any]]:
+    """
+    Resolve a schema to a JSON Schema dict.
+    
+    Accepts:
+    - A Pydantic BaseModel class (calls model_json_schema() automatically)
+    - A dict (passed through as-is)
+    - None (returns None)
+    """
+    if schema is None:
+        return None
+    
+    # Check if it's a Pydantic model class
+    if isinstance(schema, type) and hasattr(schema, "model_json_schema"):
+        return schema.model_json_schema()
+    
+    # Already a dict
+    if isinstance(schema, dict):
+        return schema
+    
+    # Unknown type - try to use it as-is
+    return schema
+
 TERMINAL_STATUSES: List[RunStatus] = ["succeeded", "failed", "canceled", "timed_out"]
 
 
@@ -102,7 +126,7 @@ class Subconscious:
 
         Args:
             engine: The engine to use ("tim-large" or "tim-small-preview")
-            input: Input configuration with instructions and tools
+            input: Input configuration with instructions, tools, and optional answer/reasoning formats
             options: Optional run options (await_completion, etc.)
 
         Returns:
@@ -110,11 +134,18 @@ class Subconscious:
 
         Example:
             ```python
+            from pydantic import BaseModel
+            
+            class Result(BaseModel):
+                answer: str
+                confidence: float
+            
             run = client.run(
                 engine="tim-large",
                 input={
                     "instructions": "Search for AI news",
                     "tools": [{"type": "platform", "id": "parallel_search"}],
+                    "answerFormat": Result,  # Pass the Pydantic class directly
                 },
                 options={"await_completion": True},
             )
@@ -122,9 +153,21 @@ class Subconscious:
         """
         # Normalize input
         if isinstance(input, RunInput):
-            input_dict = {"instructions": input.instructions, "tools": input.tools}
+            input_dict: Dict[str, Any] = {
+                "instructions": input.instructions,
+                "tools": input.tools,
+            }
+            if input.answer_format is not None:
+                input_dict["answerFormat"] = _resolve_schema(input.answer_format)
+            if input.reasoning_format is not None:
+                input_dict["reasoningFormat"] = _resolve_schema(input.reasoning_format)
         else:
-            input_dict = input
+            input_dict = dict(input)  # Make a copy to avoid mutating
+            # Resolve Pydantic models to JSON Schema
+            if "answerFormat" in input_dict:
+                input_dict["answerFormat"] = _resolve_schema(input_dict["answerFormat"])
+            if "reasoningFormat" in input_dict:
+                input_dict["reasoningFormat"] = _resolve_schema(input_dict["reasoningFormat"])
 
         # Normalize tools to dicts
         tools = input_dict.get("tools", [])
@@ -246,7 +289,7 @@ class Subconscious:
 
         Args:
             engine: The engine to use
-            input: Input configuration with instructions and tools
+            input: Input configuration with instructions, tools, and optional answer/reasoning formats
 
         Yields:
             StreamEvent: Delta, done, or error events
@@ -256,9 +299,18 @@ class Subconscious:
 
         Example:
             ```python
+            from pydantic import BaseModel
+            
+            class Result(BaseModel):
+                summary: str
+            
             for event in client.stream(
                 engine="tim-large",
-                input={"instructions": "Write an essay", "tools": []},
+                input={
+                    "instructions": "Write an essay",
+                    "tools": [],
+                    "answerFormat": Result,  # Pass the Pydantic class directly
+                },
             ):
                 if event.type == "delta":
                     print(event.content, end="", flush=True)
@@ -272,9 +324,21 @@ class Subconscious:
         """
         # Normalize input
         if isinstance(input, RunInput):
-            input_dict = {"instructions": input.instructions, "tools": input.tools}
+            input_dict: Dict[str, Any] = {
+                "instructions": input.instructions,
+                "tools": input.tools,
+            }
+            if input.answer_format is not None:
+                input_dict["answerFormat"] = _resolve_schema(input.answer_format)
+            if input.reasoning_format is not None:
+                input_dict["reasoningFormat"] = _resolve_schema(input.reasoning_format)
         else:
-            input_dict = input
+            input_dict = dict(input)  # Make a copy to avoid mutating
+            # Resolve Pydantic models to JSON Schema
+            if "answerFormat" in input_dict:
+                input_dict["answerFormat"] = _resolve_schema(input_dict["answerFormat"])
+            if "reasoningFormat" in input_dict:
+                input_dict["reasoningFormat"] = _resolve_schema(input_dict["reasoningFormat"])
 
         # Normalize tools
         tools = input_dict.get("tools", [])
