@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <a href="https://pypi.org/project/subconscious-python/"><img src="https://img.shields.io/pypi/v/subconscious-python.svg" alt="PyPI version"></a>
-  <a href="https://pypi.org/project/subconscious-python/"><img src="https://img.shields.io/pypi/dm/subconscious-python.svg" alt="PyPI downloads"></a>
+  <a href="https://pypi.org/project/subconscious-sdk/"><img src="https://img.shields.io/pypi/v/subconscious-sdk.svg" alt="PyPI version"></a>
+  <a href="https://pypi.org/project/subconscious-sdk/"><img src="https://img.shields.io/pypi/dm/subconscious-sdk.svg" alt="PyPI downloads"></a>
   <a href="https://docs.subconscious.dev"><img src="https://img.shields.io/badge/docs-subconscious.dev-blue" alt="docs"></a>
   <img src="https://img.shields.io/badge/python-%3E%3D3.8-brightgreen" alt="python version">
-  <a href="https://github.com/subconscious-systems/subconscious-python"><img src="https://img.shields.io/pypi/l/subconscious-python.svg" alt="license"></a>
+  <a href="https://github.com/subconscious-systems/subconscious-sdk"><img src="https://img.shields.io/pypi/l/subconscious-sdk.svg" alt="license"></a>
 </p>
 
 ---
