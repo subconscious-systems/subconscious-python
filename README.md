@@ -21,14 +21,14 @@
 ## Installation
 
 ```bash
-pip install subconscious-python
+pip install subconscious-sdk
 # or
-uv add subconscious-python
+uv add subconscious-sdk
 # or
-poetry add subconscious-python
+poetry add subconscious-sdk
 ```
 
-> **Note**: The package name is `subconscious-python` but you import it as `subconscious`.
+> **Note**: The package name is `subconscious-sdk` but you import it as `subconscious`.
 
 ## Quick Start
 
