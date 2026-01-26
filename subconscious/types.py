@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Literal, Optional, Union
 from dataclasses import dataclass, field
 
 # Engine types
-Engine = Literal["tim-small-preview", "tim-large", "timini"]
+Engine = Literal["tim-edge", "tim-gpt", "tim-gpt-heavy"]
 
 
 # JSON Schema types for structured output

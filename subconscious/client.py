@@ -62,7 +62,7 @@ class Subconscious:
         client = Subconscious(api_key="your-api-key")
 
         run = client.run(
-            engine="tim-large",
+            engine="tim-gpt",
             input={
                 "instructions": "Search for the latest news about AI",
                 "tools": [{"type": "platform", "id": "parallel_search"}],
@@ -125,7 +125,7 @@ class Subconscious:
         Create a new run.
 
         Args:
-            engine: The engine to use ("tim-large" or "tim-small-preview")
+            engine: The engine to use ("tim-edge", "tim-gpt", or "tim-gpt-heavy")
             input: Input configuration with instructions, tools, and optional answer/reasoning formats
             options: Optional run options (await_completion, etc.)
 
@@ -141,7 +141,7 @@ class Subconscious:
                 confidence: float
             
             run = client.run(
-                engine="tim-large",
+                engine="tim-gpt",
                 input={
                     "instructions": "Search for AI news",
                     "tools": [{"type": "platform", "id": "parallel_search"}],
@@ -305,7 +305,7 @@ class Subconscious:
                 summary: str
             
             for event in client.stream(
-                engine="tim-large",
+                engine="tim-gpt",
                 input={
                     "instructions": "Write an essay",
                     "tools": [],
