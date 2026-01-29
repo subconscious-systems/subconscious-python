@@ -178,11 +178,14 @@ parallel_search = {
     "id": "parallel_search",
 }
 
-# Function tools (your own functions)
+# Function tools (your own HTTP endpoints)
 custom_function = {
     "type": "function",
     "name": "get_weather",
     "description": "Get current weather for a location",
+    "url": "https://api.example.com/weather",
+    "method": "GET",
+    "timeout": 30,
     "parameters": {
         "type": "object",
         "properties": {
@@ -190,9 +193,6 @@ custom_function = {
         },
         "required": ["location"],
     },
-    "url": "https://api.example.com/weather",
-    "method": "GET",
-    "timeout": 30,
 }
 
 # MCP tools
@@ -202,6 +202,61 @@ mcp_tool = {
     "allow": ["read", "write"],
 }
 ```
+
+### Tool Headers & Default Arguments
+
+Function tools support two powerful features for injecting data at call time:
+
+- **`headers`**: HTTP headers sent with the request to your tool endpoint
+- **`defaults`**: Parameter values hidden from the model and injected automatically
+
+```python
+tool_with_headers_and_defaults = {
+    "type": "function",
+    "name": "search_database",
+    "description": "Search the database",
+    "url": "https://api.example.com/search",
+    "method": "POST",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "Search query"},
+            # Define these for validation, but they'll be hidden from the model
+            "session_id": {"type": "string"},
+            "api_key": {"type": "string"},
+        },
+        "required": ["query"],  # Only query is required - model generates this
+    },
+    
+    # HEADERS: Sent as HTTP headers when this tool's endpoint is called
+    "headers": {
+        "x-custom-auth": "my-secret-token",
+        "x-request-source": "my-app",
+    },
+    
+    # DEFAULTS: Injected into parameters, hidden from model
+    "defaults": {
+        "session_id": "user-session-abc123",
+        "api_key": "secret-api-key",
+    },
+}
+```
+
+**How it works:**
+
+| Feature | Where it goes | When |
+|---------|---------------|------|
+| `headers` | HTTP request headers | Sent to your tool's URL |
+| `defaults` | Merged into request body `parameters` | At tool call time |
+
+**Default arguments flow:**
+1. Define all parameters in `properties` (required for validation)
+2. Parameters with defaults are **stripped from the schema** before the model sees them
+3. Model only generates values for non-defaulted parameters (e.g., `query`)
+4. At call time, defaults are merged into the request body
+5. Default values always take precedence over model-generated values
+
+Each tool can have its own headers and defaults - they're only applied when that specific tool is called.
 
 ### Error Handling
 

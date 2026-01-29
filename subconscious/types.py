@@ -126,7 +126,18 @@ class PlatformTool:
 
 @dataclass
 class FunctionTool:
-    """A custom function tool."""
+    """A custom function tool.
+    
+    Attributes:
+        name: The tool name the model will use to call it
+        description: Description of what the tool does
+        url: HTTP endpoint URL for the tool
+        method: HTTP method (GET or POST)
+        timeout: Request timeout in seconds
+        parameters: JSON Schema defining the tool's parameters
+        headers: HTTP headers sent when calling this tool's endpoint
+        defaults: Parameter values hidden from model and injected at call time
+    """
 
     name: str
     type: Literal["function"] = "function"
@@ -135,6 +146,10 @@ class FunctionTool:
     url: Optional[str] = None
     method: Optional[str] = None
     timeout: Optional[int] = None
+    headers: Optional[Dict[str, str]] = None
+    """HTTP headers sent when calling this tool's endpoint."""
+    defaults: Optional[Dict[str, Any]] = None
+    """Parameter values hidden from model and injected at call time."""
 
 
 @dataclass
