@@ -38,10 +38,10 @@ from subconscious import Subconscious
 client = Subconscious(api_key="your-api-key")
 
 run = client.run(
-    engine="tim-large",
+    engine="tim-gpt",
     input={
         "instructions": "Search for the latest AI news and summarize the top 3 stories",
-        "tools": [{"type": "platform", "id": "parallel_search"}],
+        "tools": [{"type": "platform", "id": "fast_search"}],
     },
     options={"await_completion": True},
 )
@@ -61,10 +61,10 @@ The simplest way to use the SDK—create a run and wait for completion:
 
 ```python
 run = client.run(
-    engine="tim-large",
+    engine="tim-gpt",
     input={
         "instructions": "Analyze the latest trends in renewable energy",
-        "tools": [{"type": "platform", "id": "parallel_search"}],
+        "tools": [{"type": "platform", "id": "fast_search"}],
     },
     options={"await_completion": True},
 )
@@ -79,7 +79,7 @@ Start a run without waiting, then check status later:
 
 ```python
 run = client.run(
-    engine="tim-large",
+    engine="tim-gpt",
     input={
         "instructions": "Generate a comprehensive report",
         "tools": [],
@@ -97,10 +97,10 @@ print(status.status)  # 'queued' | 'running' | 'succeeded' | 'failed' | 'cancele
 
 ```python
 run = client.run(
-    engine="tim-large",
+    engine="tim-gpt",
     input={
         "instructions": "Complex task",
-        "tools": [{"type": "platform", "id": "parallel_search"}],
+        "tools": [{"type": "platform", "id": "fast_search"}],
     },
 )
 
@@ -120,10 +120,10 @@ Stream text as it's generated:
 
 ```python
 for event in client.stream(
-    engine="tim-large",
+    engine="tim-gpt",
     input={
         "instructions": "Write a short essay about space exploration",
-        "tools": [{"type": "platform", "id": "parallel_search"}],
+        "tools": [{"type": "platform", "id": "fast_search"}],
     },
 ):
     if event.type == "delta":
@@ -152,10 +152,10 @@ class AnalysisResult(BaseModel):
 client = Subconscious(api_key="your-api-key")
 
 run = client.run(
-    engine="tim-large",
+    engine="tim-gpt",
     input={
         "instructions": "Analyze the latest news about electric vehicles",
-        "tools": [{"type": "platform", "id": "parallel_search"}],
+        "tools": [{"type": "platform", "id": "fast_search"}],
         "answerFormat": AnalysisResult,  # Pass the Pydantic class directly
     },
     options={"await_completion": True},
@@ -173,9 +173,9 @@ For advanced use cases, you can also specify a `reasoningFormat` to structure th
 
 ```python
 # Platform tools (hosted by Subconscious)
-parallel_search = {
+fast_search = {
     "type": "platform",
-    "id": "parallel_search",
+    "id": "fast_search",
 }
 
 # Function tools (your own HTTP endpoints)
@@ -313,7 +313,7 @@ The main client class.
 | Engine              | Type     | Availability | Description                                                       |
 | ------------------- | -------- | ------------ | ----------------------------------------------------------------- |
 | `tim-small-preview` | Unified  | Available    | Fast and tuned for search tasks                                   |
-| `tim-large`         | Compound | Available    | Generalized reasoning engine backed by the power of OpenAI        |
+| `tim-gpt`         | Compound | Available    | Generalized reasoning engine backed by the power of OpenAI        |
 | `timini`            | Compound | Coming soon  | Generalized reasoning engine backed by the power of Google Gemini |
 
 ### Run Status
