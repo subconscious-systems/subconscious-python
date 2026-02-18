@@ -171,6 +171,22 @@ For advanced use cases, you can also specify a `reasoningFormat` to structure th
 
 ### Tools
 
+**Simple Search Tools** — Use these tools to get started quickly in our playground or with our API. For example: `{"type": "platform", "id": "fast_search"}`.
+
+| Tool Name             | API Name               | Description                                                |
+| --------------------- | ---------------------- | ---------------------------------------------------------- |
+| Fast Search            | `fast_search`          | Extremely fast search for simple factual lookups           |
+| Web Search             | `web_search`           | Comprehensive web search for detailed research            |
+| Fresh Search           | `fresh_search`         | Search the web for content from the last 7 days            |
+| Page Reader            | `page_reader`          | Extract content from a specific webpage URL                 |
+| Find Similar           | `find_similar`         | Find similar links to a given URL                           |
+| People Search          | `people_search`        | Search for people, profiles, and bios                      |
+| Company Search         | `company_search`       | Search for companies, funding info, and business details   |
+| News Search            | `news_search`          | Search for news articles and press coverage                |
+| Tweet Search           | `tweet_search`         | Search for tweets and Twitter/X discussions                |
+| Research Paper Search  | `research_paper_search`| Search for academic research papers and studies            |
+| Google Search          | `google_search`        | Search the web using Google                                 |
+
 ```python
 # Platform tools (hosted by Subconscious)
 fast_search = {
