@@ -65,7 +65,7 @@ class Subconscious:
             engine="tim-gpt",
             input={
                 "instructions": "Search for the latest news about AI",
-                "tools": [{"type": "platform", "id": "parallel_search"}],
+                "tools": [{"type": "platform", "id": "fast_search"}],
             },
             options={"await_completion": True},
         )
@@ -144,7 +144,7 @@ class Subconscious:
                 engine="tim-gpt",
                 input={
                     "instructions": "Search for AI news",
-                    "tools": [{"type": "platform", "id": "parallel_search"}],
+                    "tools": [{"type": "platform", "id": "fast_search"}],
                     "answerFormat": Result,  # Pass the Pydantic class directly
                 },
                 options={"await_completion": True},
