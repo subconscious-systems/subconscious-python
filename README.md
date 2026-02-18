@@ -227,13 +227,13 @@ tool_with_headers_and_defaults = {
         },
         "required": ["query"],  # Only query is required - model generates this
     },
-    
+
     # HEADERS: Sent as HTTP headers when this tool's endpoint is called
     "headers": {
         "x-custom-auth": "my-secret-token",
         "x-request-source": "my-app",
     },
-    
+
     # DEFAULTS: Injected into parameters, hidden from model
     "defaults": {
         "session_id": "user-session-abc123",
@@ -244,12 +244,13 @@ tool_with_headers_and_defaults = {
 
 **How it works:**
 
-| Feature | Where it goes | When |
-|---------|---------------|------|
-| `headers` | HTTP request headers | Sent to your tool's URL |
-| `defaults` | Merged into request body `parameters` | At tool call time |
+| Feature    | Where it goes                         | When                    |
+| ---------- | ------------------------------------- | ----------------------- |
+| `headers`  | HTTP request headers                  | Sent to your tool's URL |
+| `defaults` | Merged into request body `parameters` | At tool call time       |
 
 **Default arguments flow:**
+
 1. Define all parameters in `properties` (required for validation)
 2. Parameters with defaults are **stripped from the schema** before the model sees them
 3. Model only generates values for non-defaulted parameters (e.g., `query`)
@@ -293,28 +294,30 @@ The main client class.
 
 #### Constructor Options
 
-| Option     | Type   | Required | Default                           |
-| ---------- | ------ | -------- | --------------------------------- |
-| `api_key`  | `str`  | Yes      | -                                 |
-| `base_url` | `str`  | No       | `https://api.subconscious.dev/v1` |
+| Option     | Type  | Required | Default                           |
+| ---------- | ----- | -------- | --------------------------------- |
+| `api_key`  | `str` | Yes      | -                                 |
+| `base_url` | `str` | No       | `https://api.subconscious.dev/v1` |
 
 #### Methods
 
-| Method                      | Description              |
-| --------------------------- | ------------------------ |
-| `run(engine, input, options)` | Create a new run       |
-| `stream(engine, input)`     | Stream text deltas       |
-| `get(run_id)`               | Get run status           |
-| `wait(run_id, options)`     | Poll until completion    |
-| `cancel(run_id)`            | Cancel a running run     |
+| Method                        | Description           |
+| ----------------------------- | --------------------- |
+| `run(engine, input, options)` | Create a new run      |
+| `stream(engine, input)`       | Stream text deltas    |
+| `get(run_id)`                 | Get run status        |
+| `wait(run_id, options)`       | Poll until completion |
+| `cancel(run_id)`              | Cancel a running run  |
 
 ### Engines
 
-| Engine              | Type     | Availability | Description                                                       |
-| ------------------- | -------- | ------------ | ----------------------------------------------------------------- |
-| `tim-small-preview` | Unified  | Available    | Fast and tuned for search tasks                                   |
-| `tim-gpt`         | Compound | Available    | Generalized reasoning engine backed by the power of OpenAI        |
-| `timini`            | Compound | Coming soon  | Generalized reasoning engine backed by the power of Google Gemini |
+| Engine          | Type     | Description                                                                     | Input    | Output    |
+| --------------- | -------- | ------------------------------------------------------------------------------- | -------- | --------- |
+| `tim`           | Unified  | Our flagship unified agent engine for a wide range of tasks                     | $2.00/1M | $8.00/1M  |
+| `tim-edge`      | Unified  | Highly efficient engine tuned for performance with search tools                 | $0.50/1M | $2.00/1M  |
+| `timini`        | Compound | Complex reasoning engine for long-context and tool use backed by Gemini-3 Flash | $2.00/1M | $12.00/1M |
+| `tim-gpt`       | Compound | Complex reasoning engine for long-context and tool use backed by OpenAI GPT-4.1 | $2.00/1M | $8.00/1M  |
+| `tim-gpt-heavy` | Compound | Complex reasoning engine for long-context and tool use backed by OpenAI GPT-5.2 | $2.00/1M | $15.00/1M |
 
 ### Run Status
 
@@ -343,5 +346,6 @@ Apache-2.0
 ## Support
 
 For support and questions:
+
 - Documentation: https://docs.subconscious.dev
 - Email: {hongyin,jack}@subconscious.dev
