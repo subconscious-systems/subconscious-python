@@ -1,7 +1,9 @@
 """Subconscious API client."""
 
 import json
+import os
 import time
+from pathlib import Path
 from typing import Any, Dict, Generator, List, Optional, Union
 
 import requests
@@ -23,6 +25,36 @@ from .types import (
     Tool,
     Usage,
 )
+
+
+def _resolve_api_key(explicit: Optional[str]) -> str:
+    """
+    Resolve the API key using a standard precedence chain:
+      1. Explicitly passed ``api_key`` argument
+      2. ``SUBCONSCIOUS_API_KEY`` environment variable
+      3. ``~/.subcon/config.json`` (written by ``subconscious login``)
+    """
+    if explicit:
+        return explicit
+
+    env_key = os.environ.get("SUBCONSCIOUS_API_KEY")
+    if env_key:
+        return env_key
+
+    try:
+        config_path = Path.home() / ".subcon" / "config.json"
+        config = json.loads(config_path.read_text())
+        if config.get("subconscious_api_key"):
+            return config["subconscious_api_key"]
+    except (OSError, json.JSONDecodeError, KeyError):
+        pass
+
+    raise ValueError(
+        "No API key found. Either:\n"
+        "  • Pass api_key to the Subconscious constructor\n"
+        "  • Set SUBCONSCIOUS_API_KEY environment variable\n"
+        "  • Run `npx subconscious login` to authenticate"
+    )
 
 
 def _resolve_schema(schema: Any) -> Optional[Dict[str, Any]]:
@@ -55,11 +87,15 @@ class Subconscious:
     """
     The main Subconscious API client.
 
+    The API key is resolved automatically if not provided:
+    ``api_key`` argument → ``SUBCONSCIOUS_API_KEY`` env var → ``~/.subcon/config.json``.
+
     Example:
         ```python
         from subconscious import Subconscious
 
-        client = Subconscious(api_key="your-api-key")
+        # Key auto-resolved from env or ~/.subcon/config.json
+        client = Subconscious()
 
         run = client.run(
             engine="tim-gpt",
@@ -76,19 +112,18 @@ class Subconscious:
 
     def __init__(
         self,
-        api_key: str,
+        api_key: Optional[str] = None,
         base_url: str = "https://api.subconscious.dev/v1",
     ):
         """
         Initialize the Subconscious client.
 
         Args:
-            api_key: Your Subconscious API key
+            api_key: Your Subconscious API key. If omitted, resolved from
+                     SUBCONSCIOUS_API_KEY env var or ~/.subcon/config.json.
             base_url: API base URL (default: https://api.subconscious.dev/v1)
         """
-        if not api_key:
-            raise ValueError("api_key is required")
-        self._api_key = api_key
+        self._api_key = _resolve_api_key(api_key)
         self._base_url = base_url.rstrip("/")
 
     def _headers(self) -> Dict[str, str]:
