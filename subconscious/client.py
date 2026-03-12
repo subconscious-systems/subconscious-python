@@ -157,6 +157,8 @@ class Subconscious:
                 "instructions": input.instructions,
                 "tools": input.tools,
             }
+            if input.images is not None:
+                input_dict["images"] = input.images
             if input.answer_format is not None:
                 input_dict["answerFormat"] = _resolve_schema(input.answer_format)
             if input.reasoning_format is not None:
@@ -328,6 +330,8 @@ class Subconscious:
                 "instructions": input.instructions,
                 "tools": input.tools,
             }
+            if input.images is not None:
+                input_dict["images"] = input.images
             if input.answer_format is not None:
                 input_dict["answerFormat"] = _resolve_schema(input.answer_format)
             if input.reasoning_format is not None:

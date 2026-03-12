@@ -171,6 +171,8 @@ class RunInput:
 
     instructions: str
     tools: List[Tool] = field(default_factory=list)
+    images: Optional[List[str]] = None
+    """Base64-encoded images to include with the initial message."""
     answer_format: Optional[OutputSchema] = None
     """JSON Schema for the answer output format. Use pydantic_to_schema() to generate from Pydantic."""
     reasoning_format: Optional[OutputSchema] = None
