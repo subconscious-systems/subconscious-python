@@ -24,6 +24,9 @@ from .types import (
     PlatformTool,
     FunctionTool,
     MCPTool,
+    McpAuth,
+    NativeTool,
+    McpToolAnnotations,
     # Stream events
     StreamEvent,
     DeltaEvent,
@@ -41,7 +44,7 @@ from .errors import (
     ValidationError,
 )
 
-__version__ = "0.2.1"
+__version__ = "0.3.0"
 __author__ = "Subconscious Systems"
 __email__ = "contact@subconscious.dev"
 
@@ -66,6 +69,9 @@ __all__ = [
     "PlatformTool",
     "FunctionTool",
     "MCPTool",
+    "McpAuth",
+    "NativeTool",
+    "McpToolAnnotations",
     # Stream events
     "StreamEvent",
     "DeltaEvent",

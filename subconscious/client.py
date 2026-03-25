@@ -80,6 +80,41 @@ def _resolve_schema(schema: Any) -> Optional[Dict[str, Any]]:
     # Unknown type - try to use it as-is
     return schema
 
+# Python snake_case → API camelCase key mapping for tool serialization
+_TOOL_KEY_MAP = {
+    "allowed_tools": "allowedTools",
+    "tool_config": "toolConfig",
+    "read_only_hint": "readOnlyHint",
+    "destructive_hint": "destructiveHint",
+    "idempotent_hint": "idempotentHint",
+    "open_world_hint": "openWorldHint",
+}
+
+
+def _normalize_tool(tool: Any) -> Dict[str, Any]:
+    """Convert a tool dataclass to an API-compatible dict.
+
+    Strips None values and maps snake_case keys to camelCase.
+    """
+    if not hasattr(tool, "__dict__"):
+        return tool
+
+    result = {}
+    for k, v in tool.__dict__.items():
+        if v is None:
+            continue
+        # Recursively normalize nested dataclasses (e.g. McpAuth)
+        if hasattr(v, "__dict__"):
+            v = {
+                _TOOL_KEY_MAP.get(nk, nk): nv
+                for nk, nv in v.__dict__.items()
+                if nv is not None
+            }
+        key = _TOOL_KEY_MAP.get(k, k)
+        result[key] = v
+    return result
+
+
 TERMINAL_STATUSES: List[RunStatus] = ["succeeded", "failed", "canceled", "timed_out"]
 
 
@@ -205,16 +240,7 @@ class Subconscious:
                 input_dict["reasoningFormat"] = _resolve_schema(input_dict["reasoningFormat"])
 
         # Normalize tools to dicts
-        tools = input_dict.get("tools", [])
-        normalized_tools = []
-        for tool in tools:
-            if hasattr(tool, "__dict__"):
-                normalized_tools.append(
-                    {k: v for k, v in tool.__dict__.items() if v is not None}
-                )
-            else:
-                normalized_tools.append(tool)
-        input_dict["tools"] = normalized_tools
+        input_dict["tools"] = [_normalize_tool(t) for t in input_dict.get("tools", [])]
 
         # Make request
         data = self._request(
@@ -375,17 +401,8 @@ class Subconscious:
             if "reasoningFormat" in input_dict:
                 input_dict["reasoningFormat"] = _resolve_schema(input_dict["reasoningFormat"])
 
-        # Normalize tools
-        tools = input_dict.get("tools", [])
-        normalized_tools = []
-        for tool in tools:
-            if hasattr(tool, "__dict__"):
-                normalized_tools.append(
-                    {k: v for k, v in tool.__dict__.items() if v is not None}
-                )
-            else:
-                normalized_tools.append(tool)
-        input_dict["tools"] = normalized_tools
+        # Normalize tools to dicts
+        input_dict["tools"] = [_normalize_tool(t) for t in input_dict.get("tools", [])]
 
         url = f"{self._base_url}/runs/stream"
         headers = {
