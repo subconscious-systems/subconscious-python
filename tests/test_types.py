@@ -5,9 +5,7 @@ import pytest
 from subconscious.types import (
     FunctionTool,
     McpAuth,
-    McpToolAnnotations,
     MCPTool,
-    NativeTool,
     PlatformTool,
     Tool,
 )
@@ -55,76 +53,6 @@ class TestMCPTool:
 
 
 # ---------------------------------------------------------------------------
-# NativeTool construction
-# ---------------------------------------------------------------------------
-
-class TestNativeTool:
-    def test_basic_construction(self):
-        tool = NativeTool(
-            name="computer_use",
-            provider="anthropic",
-            tool_config={"display_width": 1024},
-            url="https://api.example.com/tools/computer",
-        )
-        assert tool.name == "computer_use"
-        assert tool.provider == "anthropic"
-        assert tool.tool_config == {"display_width": 1024}
-        assert tool.url == "https://api.example.com/tools/computer"
-        assert tool.type == "native"
-        assert tool.method == "POST"
-        assert tool.timeout is None
-        assert tool.headers is None
-        assert tool.defaults is None
-
-    def test_with_optional_fields(self):
-        tool = NativeTool(
-            name="computer_use",
-            provider="anthropic",
-            tool_config={},
-            url="https://api.example.com/tools/computer",
-            method="GET",
-            timeout=30,
-            headers={"X-Custom": "val"},
-            defaults={"display_width": 1024},
-        )
-        assert tool.method == "GET"
-        assert tool.timeout == 30
-        assert tool.headers == {"X-Custom": "val"}
-        assert tool.defaults == {"display_width": 1024}
-
-
-# ---------------------------------------------------------------------------
-# McpToolAnnotations
-# ---------------------------------------------------------------------------
-
-class TestMcpToolAnnotations:
-    def test_all_none_defaults(self):
-        ann = McpToolAnnotations()
-        assert ann.title is None
-        assert ann.read_only_hint is None
-        assert ann.destructive_hint is None
-        assert ann.idempotent_hint is None
-        assert ann.open_world_hint is None
-
-    def test_partial_construction(self):
-        ann = McpToolAnnotations(title="Search", read_only_hint=True)
-        assert ann.title == "Search"
-        assert ann.read_only_hint is True
-        assert ann.destructive_hint is None
-
-    def test_full_construction(self):
-        ann = McpToolAnnotations(
-            title="Delete",
-            read_only_hint=False,
-            destructive_hint=True,
-            idempotent_hint=False,
-            open_world_hint=True,
-        )
-        assert ann.destructive_hint is True
-        assert ann.open_world_hint is True
-
-
-# ---------------------------------------------------------------------------
 # Tool union type assignability
 # ---------------------------------------------------------------------------
 
@@ -140,12 +68,6 @@ class TestToolUnion:
     def test_mcp_tool_is_tool(self):
         tool: Tool = MCPTool(server="https://x.com/mcp")
         assert tool.type == "mcp"
-
-    def test_native_tool_is_tool(self):
-        tool: Tool = NativeTool(
-            name="t", provider="p", tool_config={}, url="https://x.com"
-        )
-        assert tool.type == "native"
 
     def test_dict_is_tool(self):
         tool: Tool = {"type": "custom", "name": "raw"}
@@ -186,38 +108,10 @@ class TestNormalizeTool:
         assert "auth" not in result
         assert set(result.keys()) == {"server", "type"}
 
-    def test_native_tool_serialization(self):
-        tool = NativeTool(
-            name="computer_use",
-            provider="anthropic",
-            tool_config={"w": 1024},
-            url="https://x.com",
-            timeout=30,
-        )
-        result = _normalize_tool(tool)
-        assert result["name"] == "computer_use"
-        assert result["toolConfig"] == {"w": 1024}
-        assert result["timeout"] == 30
-        assert "headers" not in result  # None stripped
-        assert "defaults" not in result  # None stripped
-
     def test_dict_passthrough(self):
         raw = {"type": "custom", "name": "raw"}
         result = _normalize_tool(raw)
         assert result == raw
-
-    def test_annotations_key_mapping(self):
-        ann = McpToolAnnotations(
-            title="Search",
-            read_only_hint=True,
-            destructive_hint=False,
-        )
-        result = _normalize_tool(ann)
-        assert result["readOnlyHint"] is True
-        assert result["destructiveHint"] is False
-        assert "read_only_hint" not in result
-        assert "idempotentHint" not in result  # None stripped
-
 
 # ---------------------------------------------------------------------------
 # Backward compatibility

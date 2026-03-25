@@ -25,8 +25,6 @@ from .types import (
     FunctionTool,
     MCPTool,
     McpAuth,
-    NativeTool,
-    McpToolAnnotations,
     # Stream events
     StreamEvent,
     DeltaEvent,
@@ -70,8 +68,6 @@ __all__ = [
     "FunctionTool",
     "MCPTool",
     "McpAuth",
-    "NativeTool",
-    "McpToolAnnotations",
     # Stream events
     "StreamEvent",
     "DeltaEvent",

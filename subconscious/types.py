@@ -178,37 +178,8 @@ class MCPTool:
     auth: Optional[McpAuth] = None
 
 
-@dataclass
-class NativeTool:
-    """A provider-native tool (e.g. Anthropic computer_use).
-
-    Passed through to the provider without normalization.
-    """
-
-    name: str
-    provider: str
-    tool_config: Dict[str, Any]
-    url: str
-    method: Literal["POST", "GET"] = "POST"
-    type: Literal["native"] = "native"
-    timeout: Optional[int] = None
-    headers: Optional[Dict[str, str]] = None
-    defaults: Optional[Dict[str, Any]] = None
-
-
-@dataclass
-class McpToolAnnotations:
-    """Metadata hints from an MCP server about a tool's behavior."""
-
-    title: Optional[str] = None
-    read_only_hint: Optional[bool] = None
-    destructive_hint: Optional[bool] = None
-    idempotent_hint: Optional[bool] = None
-    open_world_hint: Optional[bool] = None
-
-
 # Tool union type
-Tool = Union[PlatformTool, FunctionTool, MCPTool, NativeTool, Dict[str, Any]]
+Tool = Union[PlatformTool, FunctionTool, MCPTool, Dict[str, Any]]
 
 
 @dataclass

@@ -83,11 +83,6 @@ def _resolve_schema(schema: Any) -> Optional[Dict[str, Any]]:
 # Python snake_case → API camelCase key mapping for tool serialization
 _TOOL_KEY_MAP = {
     "allowed_tools": "allowedTools",
-    "tool_config": "toolConfig",
-    "read_only_hint": "readOnlyHint",
-    "destructive_hint": "destructiveHint",
-    "idempotent_hint": "idempotentHint",
-    "open_world_hint": "openWorldHint",
 }
 
 
