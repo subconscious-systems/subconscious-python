@@ -154,7 +154,24 @@ class FunctionTool:
 
 @dataclass
 class McpAuth:
-    """Authentication configuration for an MCP server."""
+    """MCP Authentication.
+
+    Used for MCP tools that require authentication.
+    Will take the shape of one of the following:
+
+    - Bearer:  ``{ "type": "bearer", "token": "<token>" }``
+    - API key: ``{ "type": "api_key", "token": "<token>", "header": "<header>" }``
+
+    Bearer auth is the most common method (e.g. OAuth tokens).
+    For API key auth, the header is typically ``X-Api-Key`` but may vary —
+    check the documentation of the MCP server you are connecting to.
+
+    Attributes:
+        type: Auth method — ``"bearer"`` or ``"api_key"``.
+        token: The token or key value.
+        header: For ``api_key`` auth only, the header name to send the token
+            in (e.g. ``"X-Api-Key"``).
+    """
 
     type: Literal["bearer", "api_key"]
     token: Optional[str] = None
@@ -166,13 +183,13 @@ class MCPTool:
     """An MCP (Model Context Protocol) tool.
 
     Attributes:
-        server: URL of the MCP server
+        url: URL of the MCP server
         allowed_tools: Tool names to enable. Case-insensitive.
             ["*"] or omit for all tools. [] blocks all.
         auth: Optional authentication for the MCP server
     """
 
-    server: str
+    url: str
     type: Literal["mcp"] = "mcp"
     allowed_tools: Optional[List[str]] = None
     auth: Optional[McpAuth] = None

@@ -214,7 +214,7 @@ custom_function = {
 # MCP tools (connect to any MCP server)
 mcp_tool = {
     "type": "mcp",
-    "server": "https://mcp.example.com",
+    "url": "https://mcp.example.com",
     "allowedTools": ["search", "get_page"],
 }
 ```
@@ -290,7 +290,7 @@ run = client.run(
     input={
         "instructions": "Find my recent meeting notes",
         "tools": [
-            MCPTool(server="https://mcp.notion.so/v1"),
+            MCPTool(url="https://mcp.notion.so/v1"),
         ],
     },
     options={"await_completion": True},
@@ -303,7 +303,7 @@ run = client.run(
         "instructions": "Search my documents",
         "tools": [
             MCPTool(
-                server="https://mcp.notion.so/v1",
+                url="https://mcp.notion.so/v1",
                 allowed_tools=["search", "get_page"],  # case-insensitive
             ),
         ],
@@ -311,14 +311,14 @@ run = client.run(
     options={"await_completion": True},
 )
 
-# With authentication
+# With bearer auth (most common — e.g. OAuth tokens)
 run = client.run(
     engine="tim-gpt",
     input={
         "instructions": "Check my calendar",
         "tools": [
             MCPTool(
-                server="https://mcp.google.com/v1",
+                url="https://mcp.google.com/v1",
                 auth=McpAuth(type="bearer", token="your-oauth-token"),
             ),
         ],
@@ -327,13 +327,15 @@ run = client.run(
 )
 
 # API key auth with custom header
+# The header is typically "X-Api-Key" but may vary —
+# check the docs of the MCP server you are connecting to.
 run = client.run(
     engine="tim-gpt",
     input={
         "instructions": "Query the database",
         "tools": [
             MCPTool(
-                server="https://mcp.example.com",
+                url="https://mcp.example.com",
                 auth=McpAuth(type="api_key", token="key123", header="X-Api-Key"),
             ),
         ],
@@ -354,7 +356,7 @@ run = client.run(
 You can also pass MCP tools as plain dicts:
 
 ```python
-{"type": "mcp", "server": "https://mcp.example.com", "allowedTools": ["search"]}
+{"type": "mcp", "url": "https://mcp.example.com", "allowedTools": ["search"]}
 ```
 
 ### Error Handling
