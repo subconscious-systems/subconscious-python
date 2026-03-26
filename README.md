@@ -279,6 +279,15 @@ Each tool can have its own headers and defaults - they're only applied when that
 
 Connect to any [Model Context Protocol](https://modelcontextprotocol.io/) server and use its tools in your runs. Subconscious discovers tools from the server, filters by your `allowedTools` list, and proxies calls automatically.
 
+#### Authentication
+
+MCP servers that require authentication accept an `auth` object. The auth translates to an HTTP header sent with every tool call:
+
+| Method | When to use | Header sent |
+| --- | --- | --- |
+| **Bearer** | Most common — OAuth tokens, JWTs, etc. | `Authorization: Bearer <token>` |
+| **API key** | Service-specific API keys | `<header>: <token>` (header is typically `X-Api-Key` — check your MCP server's docs) |
+
 ```python
 from subconscious import Subconscious, MCPTool, McpAuth
 
@@ -312,6 +321,7 @@ run = client.run(
 )
 
 # With bearer auth (most common — e.g. OAuth tokens)
+# → sends header: { "Authorization": "Bearer <token>" }
 run = client.run(
     engine="tim-gpt",
     input={
@@ -327,7 +337,8 @@ run = client.run(
 )
 
 # API key auth with custom header
-# The header is typically "X-Api-Key" but may vary —
+# → sends header: { "X-Api-Key": "<token>" }
+# The header name is typically "X-Api-Key" but may vary —
 # check the docs of the MCP server you are connecting to.
 run = client.run(
     engine="tim-gpt",

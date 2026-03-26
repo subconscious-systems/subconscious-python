@@ -157,10 +157,10 @@ class McpAuth:
     """MCP Authentication.
 
     Used for MCP tools that require authentication.
-    Will take the shape of one of the following:
+    Translates to an HTTP header sent with every tool call:
 
-    - Bearer:  ``{ "type": "bearer", "token": "<token>" }``
-    - API key: ``{ "type": "api_key", "token": "<token>", "header": "<header>" }``
+    - Bearer:  ``{ "Authorization": "Bearer <token>" }``
+    - API key: ``{ "<header>": "<token>" }``
 
     Bearer auth is the most common method (e.g. OAuth tokens).
     For API key auth, the header is typically ``X-Api-Key`` but may vary —
@@ -174,7 +174,7 @@ class McpAuth:
     """
 
     type: Literal["bearer", "api_key"]
-    token: Optional[str] = None
+    token: str
     header: Optional[str] = None
 
 
