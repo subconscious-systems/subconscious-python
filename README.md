@@ -211,11 +211,11 @@ custom_function = {
     },
 }
 
-# MCP tools
+# MCP tools (connect to any MCP server)
 mcp_tool = {
     "type": "mcp",
     "url": "https://mcp.example.com",
-    "allow": ["read", "write"],
+    "allowedTools": ["search", "get_page"],
 }
 ```
 
@@ -274,6 +274,101 @@ tool_with_headers_and_defaults = {
 5. Default values always take precedence over model-generated values
 
 Each tool can have its own headers and defaults - they're only applied when that specific tool is called.
+
+### MCP Tools
+
+Connect to any [Model Context Protocol](https://modelcontextprotocol.io/) server and use its tools in your runs. Subconscious discovers tools from the server, filters by your `allowedTools` list, and proxies calls automatically.
+
+#### Authentication
+
+MCP servers that require authentication accept an `auth` object. The auth translates to an HTTP header sent with every tool call:
+
+| Method | When to use | Header sent |
+| --- | --- | --- |
+| **Bearer** | Most common — OAuth tokens, JWTs, etc. | `Authorization: Bearer <token>` |
+| **API key** | Service-specific API keys | `<header>: <token>` (header is typically `X-Api-Key` — check your MCP server's docs) |
+
+```python
+from subconscious import Subconscious, MCPTool, McpAuth
+
+client = Subconscious()
+
+# Basic — use all tools from an MCP server
+run = client.run(
+    engine="tim-gpt",
+    input={
+        "instructions": "Find my recent meeting notes",
+        "tools": [
+            MCPTool(url="https://mcp.notion.so/v1"),
+        ],
+    },
+    options={"await_completion": True},
+)
+
+# Filter to specific tools
+run = client.run(
+    engine="tim-gpt",
+    input={
+        "instructions": "Search my documents",
+        "tools": [
+            MCPTool(
+                url="https://mcp.notion.so/v1",
+                allowed_tools=["search", "get_page"],  # case-insensitive
+            ),
+        ],
+    },
+    options={"await_completion": True},
+)
+
+# With bearer auth (most common — e.g. OAuth tokens)
+# → sends header: { "Authorization": "Bearer <token>" }
+run = client.run(
+    engine="tim-gpt",
+    input={
+        "instructions": "Check my calendar",
+        "tools": [
+            MCPTool(
+                url="https://mcp.google.com/v1",
+                auth=McpAuth(type="bearer", token="your-oauth-token"),
+            ),
+        ],
+    },
+    options={"await_completion": True},
+)
+
+# API key auth with custom header
+# → sends header: { "X-Api-Key": "<token>" }
+# The header name is typically "X-Api-Key" but may vary —
+# check the docs of the MCP server you are connecting to.
+run = client.run(
+    engine="tim-gpt",
+    input={
+        "instructions": "Query the database",
+        "tools": [
+            MCPTool(
+                url="https://mcp.example.com",
+                auth=McpAuth(type="api_key", token="key123", header="X-Api-Key"),
+            ),
+        ],
+    },
+    options={"await_completion": True},
+)
+```
+
+**`allowedTools` filtering:**
+
+| Value | Behavior |
+| --- | --- |
+| Omitted / `None` | All tools from the server are enabled |
+| `["*"]` | All tools enabled (explicit wildcard) |
+| `["search", "fetch"]` | Only these tools (case-insensitive) |
+| `[]` | No tools (blocks all) |
+
+You can also pass MCP tools as plain dicts:
+
+```python
+{"type": "mcp", "url": "https://mcp.example.com", "allowedTools": ["search"]}
+```
 
 ### Error Handling
 
