@@ -1,6 +1,7 @@
 """Subconscious API client."""
 
 import json
+import logging
 import os
 import time
 from pathlib import Path
@@ -25,6 +26,8 @@ from .types import (
     Tool,
     Usage,
 )
+
+logger = logging.getLogger("subconscious.client")
 
 
 def _resolve_api_key(explicit: Optional[str]) -> str:
@@ -144,6 +147,7 @@ class Subconscious:
         self,
         api_key: Optional[str] = None,
         base_url: str = "https://api.subconscious.dev/v1",
+        tunnel: Optional[Any] = None,
     ):
         """
         Initialize the Subconscious client.
@@ -152,9 +156,14 @@ class Subconscious:
             api_key: Your Subconscious API key. If omitted, resolved from
                      SUBCONSCIOUS_API_KEY env var or ~/.subcon/config.json.
             base_url: API base URL (default: https://api.subconscious.dev/v1)
+            tunnel: Optional tunnel provider for dev mode. If not provided,
+                    a LocalTunnel is auto-created when needed.
         """
         self._api_key = _resolve_api_key(api_key)
         self._base_url = base_url.rstrip("/")
+        self._tunnel_provider = tunnel
+        self._dev_server = None  # Lazy: DevServer instance
+        self._tunnel_url = None  # Lazy: public tunnel URL
 
     def _headers(self) -> Dict[str, str]:
         """Get default request headers."""
@@ -234,8 +243,14 @@ class Subconscious:
             if "reasoningFormat" in input_dict:
                 input_dict["reasoningFormat"] = _resolve_schema(input_dict["reasoningFormat"])
 
-        # Normalize tools to dicts
-        input_dict["tools"] = [_normalize_tool(t) for t in input_dict.get("tools", [])]
+        # Process backends, local tools, and MCP servers (dev mode)
+        input_dict = self._prepare_input(input_dict)
+
+        # Normalize remaining tools to dicts (API tools not yet normalized)
+        input_dict["tools"] = [
+            _normalize_tool(t) if not isinstance(t, dict) else t
+            for t in input_dict.get("tools", [])
+        ]
 
         # Make request
         data = self._request(
@@ -396,8 +411,14 @@ class Subconscious:
             if "reasoningFormat" in input_dict:
                 input_dict["reasoningFormat"] = _resolve_schema(input_dict["reasoningFormat"])
 
-        # Normalize tools to dicts
-        input_dict["tools"] = [_normalize_tool(t) for t in input_dict.get("tools", [])]
+        # Process backends, local tools, and MCP servers (dev mode)
+        input_dict = self._prepare_input(input_dict)
+
+        # Normalize remaining tools to dicts
+        input_dict["tools"] = [
+            _normalize_tool(t) if not isinstance(t, dict) else t
+            for t in input_dict.get("tools", [])
+        ]
 
         url = f"{self._base_url}/runs/stream"
         headers = {
@@ -471,6 +492,108 @@ class Subconscious:
                     pass
 
         return Run(run_id=run_id, status="succeeded") if run_id else None
+
+    # ── Dev mode lifecycle ──
+
+    def _prepare_input(self, input_dict: Dict[str, Any]) -> Dict[str, Any]:
+        """Process backends, local tools, and MCP servers in the input.
+
+        Detects non-API tool types (backends, @tool functions, MCPStdioServers),
+        starts the dev server and tunnel if needed, and converts everything to
+        FunctionTool dicts with tunnel URLs.
+        """
+        local_tools: List[Dict[str, Any]] = []
+
+        # 1. Handle backend
+        backend = input_dict.pop("backend", None)
+        if backend is not None:
+            self._ensure_dev_server()
+            local_tools.extend(self._dev_server.register_backend(backend))
+
+        # 2. Process tools list — separate local tools from API tools
+        raw_tools = input_dict.get("tools", [])
+        api_tools: List[Any] = []
+
+        for t in raw_tools:
+            # @tool-decorated function
+            if hasattr(t, "_subcon_tool"):
+                self._ensure_dev_server()
+                local_tools.append(self._dev_server.register_tool(t))
+            # MCPStdioServer
+            elif hasattr(t, "discover_tools") and hasattr(t, "call_tool"):
+                self._ensure_dev_server()
+                local_tools.extend(self._dev_server.register_mcp_proxy(t))
+            else:
+                # Regular tool (dict, dataclass, PlatformTool, FunctionTool, MCPTool)
+                api_tools.append(_normalize_tool(t))
+
+        # 3. Start tunnel if we have any local tools
+        if local_tools:
+            self._ensure_tunnel()
+            for tool_dict in local_tools:
+                tool_dict["url"] = f"{self._tunnel_url}{tool_dict['url']}"
+                tool_dict["type"] = "function"
+                tool_dict["method"] = "POST"
+
+        input_dict["tools"] = api_tools + local_tools
+        return input_dict
+
+    def _ensure_dev_server(self) -> None:
+        """Start the dev server if not already running."""
+        if self._dev_server is not None and self._dev_server.is_running:
+            return
+
+        from subconscious.dev.server import DevServer
+
+        self._dev_server = DevServer()
+        self._dev_server.start()
+        logger.info(f"Dev server started on port {self._dev_server.port}")
+
+    def _ensure_tunnel(self) -> None:
+        """Start the tunnel if not already running."""
+        if self._tunnel_url is not None:
+            # Check if tunnel is still alive
+            if self._tunnel_provider and self._tunnel_provider.is_alive():
+                return
+            # Tunnel died, need to restart
+            self._tunnel_url = None
+
+        if self._tunnel_provider is None:
+            from subconscious.dev.tunnel import LocalTunnel
+            self._tunnel_provider = LocalTunnel()
+
+        port = self._dev_server.port
+        if port is None:
+            raise RuntimeError("Dev server not started")
+
+        self._tunnel_url = self._tunnel_provider.start(port)
+        logger.info(f"Tunnel started: {self._tunnel_url}")
+
+    def close(self) -> None:
+        """Clean up dev mode resources (tunnel, dev server, MCP processes)."""
+        if self._tunnel_provider:
+            try:
+                self._tunnel_provider.stop()
+            except Exception:
+                pass
+            self._tunnel_provider = None
+            self._tunnel_url = None
+
+        if self._dev_server:
+            try:
+                self._dev_server.stop()
+            except Exception:
+                pass
+            self._dev_server = None
+
+    def __enter__(self) -> "Subconscious":
+        return self
+
+    def __exit__(self, *args: Any) -> None:
+        self.close()
+
+    def __del__(self) -> None:
+        self.close()
 
     def _parse_run(self, data: Dict[str, Any]) -> Run:
         """Parse a run response from the API."""

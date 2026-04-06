@@ -41,6 +41,16 @@ from .errors import (
     NotFoundError,
     ValidationError,
 )
+from .tools import tool
+from .dev.mcp_proxy import MCPStdioServer
+from .backends import (
+    BackendProtocol,
+    SandboxBackend,
+    MemoryBackend,
+    LocalShellBackend,
+    FilesystemBackend,
+    CompositeBackend,
+)
 
 __version__ = "0.3.0"
 __author__ = "Subconscious Systems"
@@ -82,4 +92,14 @@ __all__ = [
     "RateLimitError",
     "NotFoundError",
     "ValidationError",
+    # Dev mode - tool decorator
+    "tool",
+    "MCPStdioServer",
+    # Dev mode - backends
+    "BackendProtocol",
+    "SandboxBackend",
+    "MemoryBackend",
+    "LocalShellBackend",
+    "FilesystemBackend",
+    "CompositeBackend",
 ]
