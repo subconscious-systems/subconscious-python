@@ -175,6 +175,12 @@ class DevServer:
                     self._respond(400, {"result": None, "error": "Invalid JSON"})
                     return
 
+                # The Subconscious engine wraps tool calls:
+                # {"tool_name": "...", "parameters": {...}, "request_id": "...", ...}
+                # Extract the actual parameters if wrapped.
+                if "parameters" in params and "tool_name" in params:
+                    params = params["parameters"]
+
                 # Find handler
                 handler = handlers.get(self.path)
                 if not handler:
@@ -208,6 +214,13 @@ class DevServer:
             def log_message(self, format: str, *args: Any) -> None:
                 # Suppress default access logs; use our logger
                 logger.debug(f"DevServer: {format % args}")
+
+            def handle_one_request(self) -> None:
+                """Override to catch BrokenPipeError from flaky tunnel proxies."""
+                try:
+                    super().handle_one_request()
+                except BrokenPipeError:
+                    pass
 
         self._server = HTTPServer(("127.0.0.1", self._port), RequestHandler)
         self._thread = Thread(target=self._server.serve_forever, daemon=True)

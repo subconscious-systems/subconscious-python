@@ -60,6 +60,10 @@ class LocalTunnel:
         if shutil.which("bore"):
             return self._start_bore(local_port)
 
+        # Try localtunnel via npx
+        if shutil.which("npx"):
+            return self._start_localtunnel(local_port)
+
         # Fallback to SSH + serveo
         if shutil.which("ssh"):
             return self._start_ssh(local_port)
@@ -67,6 +71,7 @@ class LocalTunnel:
         raise RuntimeError(
             "No tunnel provider available. Install one of:\n"
             "  pip install bore-cli    (recommended)\n"
+            "  npm i -g localtunnel    (or have npx available)\n"
             "  pip install pyngrok     (alternative, use NgrokTunnel)\n"
             "Or ensure 'ssh' is available on PATH for serveo.net fallback."
         )
@@ -95,17 +100,51 @@ class LocalTunnel:
             line = line.strip()
             logger.debug(f"bore: {line}")
 
-            if "bore.pub:" in line or "listening" in line.lower():
-                # Extract port from bore output
+            if self._bore_server in line or "listening" in line.lower():
+                # Extract host:port from bore output
                 for part in line.split():
                     if self._bore_server in part:
-                        self._public_url = f"https://{part}"
-                        if not self._public_url.startswith("https://"):
-                            self._public_url = f"https://{part}"
+                        # bore uses raw TCP tunneling — use http, not https
+                        host_port = part.strip()
+                        self._public_url = f"http://{host_port}"
                         logger.info(f"Bore tunnel: {self._public_url}")
                         return self._public_url
 
         raise RuntimeError("Timed out waiting for bore tunnel URL")
+
+    def _start_localtunnel(self, local_port: int) -> str:
+        """Start tunnel via npx localtunnel."""
+        self._process = subprocess.Popen(
+            ["npx", "-y", "localtunnel", "--port", str(local_port)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        self._method = "localtunnel"
+
+        # localtunnel outputs: "your url is: https://xxxxx.loca.lt"
+        deadline = time.time() + 30  # npx may need to install first
+        while time.time() < deadline:
+            line = self._process.stdout.readline()  # type: ignore
+            if not line:
+                if self._process.poll() is not None:
+                    raise RuntimeError(
+                        f"localtunnel exited with code {self._process.returncode}"
+                    )
+                time.sleep(0.1)
+                continue
+
+            line = line.strip()
+            logger.debug(f"localtunnel: {line}")
+
+            if "https://" in line:
+                for part in line.split():
+                    if part.startswith("https://"):
+                        self._public_url = part
+                        logger.info(f"localtunnel tunnel: {self._public_url}")
+                        return self._public_url
+
+        raise RuntimeError("Timed out waiting for localtunnel URL")
 
     def _start_ssh(self, local_port: int) -> str:
         """Start SSH reverse tunnel via serveo.net."""
