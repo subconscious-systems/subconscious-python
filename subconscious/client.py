@@ -499,43 +499,62 @@ class Subconscious:
         """Process backends, local tools, and MCP servers in the input.
 
         Detects non-API tool types (backends, @tool functions, MCPStdioServers),
-        starts the dev server and tunnel if needed, and converts everything to
-        FunctionTool dicts with tunnel URLs.
+        starts the dev server and tunnel if needed, and converts to API-compatible
+        tool dicts.
+
+        - Backends and @tool functions become FunctionTool dicts with tunnel URLs.
+        - MCPStdioServers become MCPTool dicts with tunnel URLs — the API handles
+          tool discovery and invocation natively via its MCP client.
         """
         local_tools: List[Dict[str, Any]] = []
+        mcp_tools: List[Dict[str, Any]] = []
+        needs_tunnel = False
 
         # 1. Handle backend
         backend = input_dict.pop("backend", None)
         if backend is not None:
             self._ensure_dev_server()
             local_tools.extend(self._dev_server.register_backend(backend))
+            needs_tunnel = True
 
         # 2. Process tools list — separate local tools from API tools
         raw_tools = input_dict.get("tools", [])
         api_tools: List[Any] = []
 
         for t in raw_tools:
-            # @tool-decorated function
+            # @tool-decorated function → FunctionTool via dev server
             if hasattr(t, "_subcon_tool"):
                 self._ensure_dev_server()
                 local_tools.append(self._dev_server.register_tool(t))
-            # MCPStdioServer
-            elif hasattr(t, "discover_tools") and hasattr(t, "call_tool"):
+                needs_tunnel = True
+            # MCPStdioServer → register bridge, pass as MCPTool to API
+            elif hasattr(t, "handle_request") and hasattr(t, "name"):
                 self._ensure_dev_server()
-                local_tools.extend(self._dev_server.register_mcp_proxy(t))
+                path = self._dev_server.register_mcp_server(t)
+                mcp_tools.append({
+                    "type": "mcp",
+                    "url": path,  # will be prefixed with tunnel URL below
+                    "allowedTools": t.allowed_tools,
+                })
+                needs_tunnel = True
             else:
                 # Regular tool (dict, dataclass, PlatformTool, FunctionTool, MCPTool)
                 api_tools.append(_normalize_tool(t))
 
-        # 3. Start tunnel if we have any local tools
-        if local_tools:
+        # 3. Start tunnel if we have any local tools/MCP servers
+        if needs_tunnel:
             self._ensure_tunnel()
             for tool_dict in local_tools:
                 tool_dict["url"] = f"{self._tunnel_url}{tool_dict['url']}"
                 tool_dict["type"] = "function"
                 tool_dict["method"] = "POST"
+            for mcp_dict in mcp_tools:
+                mcp_dict["url"] = f"{self._tunnel_url}{mcp_dict['url']}"
+                # Strip None allowedTools
+                if mcp_dict.get("allowedTools") is None:
+                    del mcp_dict["allowedTools"]
 
-        input_dict["tools"] = api_tools + local_tools
+        input_dict["tools"] = api_tools + local_tools + mcp_tools
         return input_dict
 
     def _ensure_dev_server(self) -> None:

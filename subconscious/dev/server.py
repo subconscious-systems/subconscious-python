@@ -53,6 +53,7 @@ class DevServer:
 
     def __init__(self) -> None:
         self._handlers: Dict[str, Callable[..., Any]] = {}
+        self._mcp_servers: Dict[str, Any] = {}  # name → MCPStdioServer
         self._port: Optional[int] = None
         self._server: Optional[HTTPServer] = None
         self._thread: Optional[Thread] = None
@@ -125,35 +126,22 @@ class DevServer:
             "url": path,
         }
 
-    def register_mcp_proxy(self, server: Any) -> List[Dict[str, Any]]:
-        """Register MCP tool proxies.
+    def register_mcp_server(self, server: Any) -> str:
+        """Register an MCP stdio server as an HTTP transport bridge.
 
-        Discovers tools from the MCP server and creates proxy handlers.
-        Returns FunctionTool-compatible schemas with relative URL paths.
+        Registers a single endpoint at ``/mcp/{name}`` that proxies all
+        MCP JSON-RPC requests to the subprocess. The Subconscious API
+        connects to this as a standard MCP server and handles tool
+        discovery natively.
+
+        Returns the relative URL path for the MCP server endpoint.
         """
-        tools: List[Dict[str, Any]] = []
-        # Delegate to the MCPStdioServer's discovery
-        discovered_tools = server.discover_tools()
-
-        for tool_info in discovered_tools:
-            tool_name = tool_info["name"]
-            path = f"/mcp/{server.name}/{tool_name}"
-
-            def make_handler(srv: Any, tn: str):
-                def handler(**params: Any) -> Any:
-                    return srv.call_tool(tn, params)
-                return handler
-
-            self.register_handler(path, make_handler(server, tool_name))
-
-            tools.append({
-                "name": f"{server.name}_{tool_name}" if server.name else tool_name,
-                "description": tool_info.get("description", ""),
-                "parameters": tool_info.get("inputSchema", {}),
-                "url": path,
-            })
-
-        return tools
+        path = f"/mcp/{server.name}"
+        # Store the server reference; the raw handler is in _mcp_servers
+        self._mcp_servers[server.name] = server
+        server._ensure_started()
+        logger.info(f"Registered MCP bridge: {path}")
+        return path
 
     def start(self) -> int:
         """Start the HTTP server in a background thread. Returns the port."""
@@ -162,13 +150,30 @@ class DevServer:
 
         self._port = _find_free_port()
         handlers = self._handlers
+        mcp_servers = self._mcp_servers
 
         class RequestHandler(BaseHTTPRequestHandler):
             def do_POST(self) -> None:
                 # Read body
                 content_length = int(self.headers.get("Content-Length", 0))
-                body = self.rfile.read(content_length) if content_length else b"{}"
+                body = self.rfile.read(content_length) if content_length else b""
 
+                # ── MCP bridge: /mcp/{name} — raw JSON-RPC passthrough ──
+                if self.path.startswith("/mcp/"):
+                    server_name = self.path.split("/")[2] if len(self.path.split("/")) > 2 else ""
+                    mcp = mcp_servers.get(server_name)
+                    if not mcp:
+                        self._respond(404, {"error": f"Unknown MCP server: {server_name}"})
+                        return
+                    try:
+                        status, response = mcp.handle_request(body)
+                        self._respond(status, response)
+                    except Exception as e:
+                        logger.exception(f"MCP bridge error: {self.path}")
+                        self._respond(502, {"jsonrpc": "2.0", "error": {"code": -32000, "message": str(e)}})
+                    return
+
+                # ── Tool/backend handlers ──
                 try:
                     params = json.loads(body) if body else {}
                 except json.JSONDecodeError:
