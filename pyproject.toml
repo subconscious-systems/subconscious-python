@@ -41,6 +41,20 @@ dev = [
     "types-requests>=2.28.0",
 ]
 
+# Dev mode extras
+tunnel = ["bore-cli>=0.5.0"]
+ngrok = ["pyngrok>=7.0.0"]
+mcp = ["mcp>=1.0.0"]
+e2b = ["e2b-code-interpreter>=1.0.0"]
+mem0 = ["mem0ai>=0.1.0"]
+all-backends = [
+    "bore-cli>=0.5.0",
+    "pyngrok>=7.0.0",
+    "mcp>=1.0.0",
+    "e2b-code-interpreter>=1.0.0",
+    "mem0ai>=0.1.0",
+]
+
 [project.urls]
 Homepage = "https://subconscious.dev"
 Documentation = "https://docs.subconscious.dev"

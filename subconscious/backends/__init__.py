@@ -29,12 +29,14 @@ from subconscious.backends.protocol import (
 from subconscious.backends.local_shell import LocalShellBackend
 from subconscious.backends.filesystem import FilesystemBackend
 from subconscious.backends.composite import CompositeBackend
+from subconscious.backends.sandbox import BaseSandbox
 
 __all__ = [
     # Protocols
     "BackendProtocol",
     "SandboxBackend",
     "MemoryBackend",
+    "BaseSandbox",
     # Backends
     "LocalShellBackend",
     "FilesystemBackend",
