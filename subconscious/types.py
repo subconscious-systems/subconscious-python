@@ -102,6 +102,7 @@ class Usage:
 
     models: List[ModelUsage] = field(default_factory=list)
     platform_tools: List[PlatformToolUsage] = field(default_factory=list)
+    duration_ms: Optional[int] = None
 
 
 @dataclass

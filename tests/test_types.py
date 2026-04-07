@@ -6,10 +6,13 @@ from subconscious.types import (
     FunctionTool,
     McpAuth,
     MCPTool,
+    ModelUsage,
     PlatformTool,
+    PlatformToolUsage,
     Tool,
+    Usage,
 )
-from subconscious.client import _normalize_tool
+from subconscious.client import _normalize_tool, Subconscious
 
 
 # ---------------------------------------------------------------------------
@@ -142,3 +145,128 @@ class TestBackwardCompat:
         result = _normalize_tool(tool)
         assert result["id"] == "fast_search"
         assert result["options"] == {"limit": 10}
+
+
+# ---------------------------------------------------------------------------
+# Usage parsing (_parse_run)
+# ---------------------------------------------------------------------------
+
+class TestParseRunUsage:
+    """Test that _parse_run correctly deserializes usage statistics."""
+
+    def _parse(self, data):
+        """Call _parse_run without needing a live client."""
+        return Subconscious._parse_run(None, data)
+
+    def test_usage_with_camel_case_api_response(self):
+        data = {
+            "runId": "run_abc",
+            "status": "succeeded",
+            "result": {"answer": "hello"},
+            "usage": {
+                "models": [
+                    {
+                        "engine": "tim-gpt",
+                        "inputTokens": 150,
+                        "outputTokens": 42,
+                        "totalTokens": 192,
+                    }
+                ],
+                "platformTools": [
+                    {"toolId": "fast_search", "calls": 3}
+                ],
+                "durationMs": 1234,
+            },
+        }
+        run = self._parse(data)
+        assert run.run_id == "run_abc"
+        assert run.status == "succeeded"
+        assert run.result.answer == "hello"
+
+        # Usage should be proper dataclass instances
+        assert isinstance(run.usage, Usage)
+        assert len(run.usage.models) == 1
+        m = run.usage.models[0]
+        assert isinstance(m, ModelUsage)
+        assert m.engine == "tim-gpt"
+        assert m.input_tokens == 150
+        assert m.output_tokens == 42
+        assert m.total_tokens == 192
+
+        assert len(run.usage.platform_tools) == 1
+        pt = run.usage.platform_tools[0]
+        assert isinstance(pt, PlatformToolUsage)
+        assert pt.tool_id == "fast_search"
+        assert pt.calls == 3
+
+        assert run.usage.duration_ms == 1234
+
+    def test_usage_with_snake_case_keys(self):
+        """Ensure snake_case keys also work (defensive)."""
+        data = {
+            "runId": "run_def",
+            "status": "succeeded",
+            "result": {"answer": "ok"},
+            "usage": {
+                "models": [
+                    {
+                        "engine": "tim-edge",
+                        "input_tokens": 10,
+                        "output_tokens": 5,
+                        "total_tokens": 15,
+                    }
+                ],
+                "platformTools": [
+                    {"tool_id": "web_browse", "calls": 1}
+                ],
+                "duration_ms": 500,
+            },
+        }
+        run = self._parse(data)
+        m = run.usage.models[0]
+        assert m.input_tokens == 10
+        assert m.output_tokens == 5
+        assert m.total_tokens == 15
+
+        pt = run.usage.platform_tools[0]
+        assert pt.tool_id == "web_browse"
+        assert run.usage.duration_ms == 500
+
+    def test_usage_with_multiple_models(self):
+        data = {
+            "runId": "run_multi",
+            "status": "succeeded",
+            "usage": {
+                "models": [
+                    {"engine": "tim-edge", "inputTokens": 10, "outputTokens": 5, "totalTokens": 15},
+                    {"engine": "tim-gpt", "inputTokens": 100, "outputTokens": 50, "totalTokens": 150},
+                ],
+                "platformTools": [],
+            },
+        }
+        run = self._parse(data)
+        assert len(run.usage.models) == 2
+        assert run.usage.models[0].engine == "tim-edge"
+        assert run.usage.models[1].engine == "tim-gpt"
+        assert run.usage.models[1].input_tokens == 100
+
+    def test_no_usage_returns_none(self):
+        data = {"runId": "run_none", "status": "queued"}
+        run = self._parse(data)
+        assert run.usage is None
+
+    def test_empty_usage_returns_none(self):
+        data = {"runId": "run_empty", "status": "queued", "usage": {}}
+        run = self._parse(data)
+        assert run.usage is None
+
+    def test_usage_without_duration(self):
+        data = {
+            "runId": "run_nodur",
+            "status": "succeeded",
+            "usage": {
+                "models": [{"engine": "tim-gpt", "inputTokens": 1, "outputTokens": 1, "totalTokens": 2}],
+            },
+        }
+        run = self._parse(data)
+        assert run.usage.duration_ms is None

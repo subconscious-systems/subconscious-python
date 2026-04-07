@@ -14,6 +14,8 @@ from .types import (
     DoneEvent,
     Engine,
     ErrorEvent,
+    ModelUsage,
+    PlatformToolUsage,
     PollOptions,
     Run,
     RunInput,
@@ -483,9 +485,27 @@ class Subconscious:
 
         usage = None
         if "usage" in data and data["usage"]:
+            raw_usage = data["usage"]
+            models = [
+                ModelUsage(
+                    engine=m.get("engine", ""),
+                    input_tokens=m.get("inputTokens", m.get("input_tokens", 0)),
+                    output_tokens=m.get("outputTokens", m.get("output_tokens", 0)),
+                    total_tokens=m.get("totalTokens", m.get("total_tokens", 0)),
+                )
+                for m in raw_usage.get("models", [])
+            ]
+            platform_tools = [
+                PlatformToolUsage(
+                    tool_id=pt.get("toolId", pt.get("tool_id", "")),
+                    calls=pt.get("calls", 0),
+                )
+                for pt in raw_usage.get("platformTools", [])
+            ]
             usage = Usage(
-                models=data["usage"].get("models", []),
-                platform_tools=data["usage"].get("platformTools", []),
+                models=models,
+                platform_tools=platform_tools,
+                duration_ms=raw_usage.get("durationMs", raw_usage.get("duration_ms")),
             )
 
         return Run(
