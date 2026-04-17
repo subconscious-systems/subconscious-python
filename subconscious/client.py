@@ -8,6 +8,11 @@ from typing import Any, Dict, Generator, List, Optional, Union
 
 import requests
 
+from ._capabilities import (
+    EngineDoesNotSupportImagesError,
+    SUGGESTED_IMAGE_ENGINES,
+    engine_supports_images,
+)
 from .errors import raise_for_status
 from .types import (
     DeltaEvent,
@@ -25,6 +30,15 @@ from .types import (
     Tool,
     Usage,
 )
+
+
+# Cap the JSON body size we'll send. Express has a 6 MB body parser limit, so we
+# keep the SDK comfortably under that to leave headroom for tools/instructions.
+MAX_REQUEST_BYTES = 5 * 1024 * 1024
+
+
+class RequestTooLargeError(ValueError):
+    """Raised when the serialized run request exceeds MAX_REQUEST_BYTES."""
 
 
 def _resolve_api_key(explicit: Optional[str]) -> str:
@@ -108,6 +122,76 @@ def _normalize_tool(tool: Any) -> Dict[str, Any]:
         key = _TOOL_KEY_MAP.get(k, k)
         result[key] = v
     return result
+
+
+def _normalize_content_block(block: Any) -> Any:
+    """Convert a Pydantic ContentBlock (or dict) to a JSON-ready dict.
+
+    The generated Pydantic models live under subconscious._schemas. We accept
+    either model instances or already-dict blocks the user constructed by hand
+    (matching the JSON Schema shape).
+    """
+    if hasattr(block, "model_dump"):
+        return block.model_dump(mode="json", exclude_none=True)
+    return block
+
+
+def _content_has_images(content: Optional[List[Any]]) -> bool:
+    if not content:
+        return False
+    for block in content:
+        block_type = (
+            getattr(block, "type", None) if not isinstance(block, dict) else block.get("type")
+        )
+        if block_type == "image":
+            return True
+    return False
+
+
+def _build_input_dict(input: Union[RunInput, Dict[str, Any]]) -> Dict[str, Any]:
+    """Lower a RunInput/dict into the on-the-wire shape expected by the API."""
+    if isinstance(input, RunInput):
+        input_dict: Dict[str, Any] = {
+            "instructions": input.instructions,
+            "tools": input.tools,
+        }
+        if input.answer_format is not None:
+            input_dict["answerFormat"] = _resolve_schema(input.answer_format)
+        if input.reasoning_format is not None:
+            input_dict["reasoningFormat"] = _resolve_schema(input.reasoning_format)
+        if input.content is not None:
+            input_dict["content"] = input.content
+    else:
+        input_dict = dict(input)  # copy so we don't mutate the caller's dict
+        if "answerFormat" in input_dict:
+            input_dict["answerFormat"] = _resolve_schema(input_dict["answerFormat"])
+        if "reasoningFormat" in input_dict:
+            input_dict["reasoningFormat"] = _resolve_schema(input_dict["reasoningFormat"])
+
+    input_dict["tools"] = [_normalize_tool(t) for t in input_dict.get("tools", [])]
+
+    # Normalize content blocks (Pydantic → dict).
+    if input_dict.get("content"):
+        input_dict["content"] = [_normalize_content_block(b) for b in input_dict["content"]]
+
+    return input_dict
+
+
+def _check_capabilities_and_size(engine: Engine, payload: Dict[str, Any]) -> None:
+    """Client-side guards mirroring server-side checks. Surfaces typed errors
+    before the network roundtrip when possible."""
+    content = payload.get("input", {}).get("content")
+    if _content_has_images(content) and not engine_supports_images(engine):
+        raise EngineDoesNotSupportImagesError(
+            f'Engine "{engine}" does not accept images. '
+            f"Use one of: {', '.join(SUGGESTED_IMAGE_ENGINES)}."
+        )
+    serialized = json.dumps(payload)
+    if len(serialized.encode("utf-8")) > MAX_REQUEST_BYTES:
+        raise RequestTooLargeError(
+            f"request body exceeds {MAX_REQUEST_BYTES} bytes — split images "
+            "across multiple turns or upload via /v1/internal/attachments first"
+        )
 
 
 TERMINAL_STATUSES: List[RunStatus] = ["succeeded", "failed", "canceled", "timed_out"]
@@ -216,32 +300,15 @@ class Subconscious:
             )
             ```
         """
-        # Normalize input
-        if isinstance(input, RunInput):
-            input_dict: Dict[str, Any] = {
-                "instructions": input.instructions,
-                "tools": input.tools,
-            }
-            if input.answer_format is not None:
-                input_dict["answerFormat"] = _resolve_schema(input.answer_format)
-            if input.reasoning_format is not None:
-                input_dict["reasoningFormat"] = _resolve_schema(input.reasoning_format)
-        else:
-            input_dict = dict(input)  # Make a copy to avoid mutating
-            # Resolve Pydantic models to JSON Schema
-            if "answerFormat" in input_dict:
-                input_dict["answerFormat"] = _resolve_schema(input_dict["answerFormat"])
-            if "reasoningFormat" in input_dict:
-                input_dict["reasoningFormat"] = _resolve_schema(input_dict["reasoningFormat"])
-
-        # Normalize tools to dicts
-        input_dict["tools"] = [_normalize_tool(t) for t in input_dict.get("tools", [])]
+        input_dict = _build_input_dict(input)
+        body = {"engine": engine, "input": input_dict}
+        _check_capabilities_and_size(engine, body)
 
         # Make request
         data = self._request(
             "POST",
             "/runs",
-            {"engine": engine, "input": input_dict},
+            body,
         )
 
         run_id = data["runId"]
@@ -378,26 +445,9 @@ class Subconscious:
             Rich streaming events (reasoning steps, tool calls) are coming soon.
             Currently provides text deltas only.
         """
-        # Normalize input
-        if isinstance(input, RunInput):
-            input_dict: Dict[str, Any] = {
-                "instructions": input.instructions,
-                "tools": input.tools,
-            }
-            if input.answer_format is not None:
-                input_dict["answerFormat"] = _resolve_schema(input.answer_format)
-            if input.reasoning_format is not None:
-                input_dict["reasoningFormat"] = _resolve_schema(input.reasoning_format)
-        else:
-            input_dict = dict(input)  # Make a copy to avoid mutating
-            # Resolve Pydantic models to JSON Schema
-            if "answerFormat" in input_dict:
-                input_dict["answerFormat"] = _resolve_schema(input_dict["answerFormat"])
-            if "reasoningFormat" in input_dict:
-                input_dict["reasoningFormat"] = _resolve_schema(input_dict["reasoningFormat"])
-
-        # Normalize tools to dicts
-        input_dict["tools"] = [_normalize_tool(t) for t in input_dict.get("tools", [])]
+        input_dict = _build_input_dict(input)
+        body = {"engine": engine, "input": input_dict}
+        _check_capabilities_and_size(engine, body)
 
         url = f"{self._base_url}/runs/stream"
         headers = {
@@ -408,7 +458,7 @@ class Subconscious:
         response = requests.post(
             url,
             headers=headers,
-            json={"engine": engine, "input": input_dict},
+            json=body,
             stream=True,
         )
         raise_for_status(response)

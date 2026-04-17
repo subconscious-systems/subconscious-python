@@ -4,7 +4,22 @@ Subconscious Python SDK
 The official Python SDK for the Subconscious API.
 """
 
-from .client import Subconscious
+from ._capabilities import (
+    EngineDoesNotSupportImagesError,
+    SUGGESTED_IMAGE_ENGINES,
+    engine_supports_images,
+)
+from .client import RequestTooLargeError, Subconscious
+from .content import (
+    ContentBlock,
+    Image,
+    ImageContent,
+    ImageSourceBase64,
+    ImageSourceBlobRef,
+    ImageSourceUrl,
+    TextContent,
+)
+from .traces import densify_trace
 from .types import (
     # Run types
     Run,
@@ -49,6 +64,21 @@ __email__ = "contact@subconscious.dev"
 __all__ = [
     # Client
     "Subconscious",
+    "RequestTooLargeError",
+    # Multimodal content
+    "Image",
+    "ContentBlock",
+    "TextContent",
+    "ImageContent",
+    "ImageSourceBase64",
+    "ImageSourceBlobRef",
+    "ImageSourceUrl",
+    # Capability helpers
+    "engine_supports_images",
+    "SUGGESTED_IMAGE_ENGINES",
+    "EngineDoesNotSupportImagesError",
+    # Trace utilities
+    "densify_trace",
     # Run types
     "Run",
     "RunStatus",

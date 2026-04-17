@@ -209,6 +209,10 @@ class RunInput:
     """JSON Schema for the answer output format. Use pydantic_to_schema() to generate from Pydantic."""
     reasoning_format: Optional[OutputSchema] = None
     """JSON Schema for the reasoning output format. Use pydantic_to_schema() to generate from Pydantic."""
+    content: Optional[List[Any]] = None
+    """Canonical multimodal content blocks. Each item is a TextContent or ImageContent
+    (Pydantic models from subconscious._schemas, or plain dicts matching the same shape).
+    Use the ``Image`` helper to build ImageContent blocks from a path/bytes/URL/blob_key."""
 
 
 @dataclass
