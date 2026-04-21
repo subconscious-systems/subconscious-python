@@ -24,11 +24,9 @@ from .types import (
     RunInput,
     RunOptions,
     RunParams,
-    RunResult,
     RunStatus,
     StreamEvent,
     Tool,
-    Usage,
 )
 
 
@@ -522,24 +520,10 @@ class Subconscious:
         return Run(run_id=run_id, status="succeeded") if run_id else None
 
     def _parse_run(self, data: Dict[str, Any]) -> Run:
-        """Parse a run response from the API."""
-        result = None
-        if "result" in data and data["result"]:
-            result = RunResult(
-                answer=data["result"].get("answer", ""),
-                reasoning=data["result"].get("reasoning"),
-            )
+        """Parse a run response from the API.
 
-        usage = None
-        if "usage" in data and data["usage"]:
-            usage = Usage(
-                models=data["usage"].get("models", []),
-                platform_tools=data["usage"].get("platformTools", []),
-            )
-
-        return Run(
-            run_id=data.get("runId", data.get("run_id", "")),
-            status=data.get("status"),
-            result=result,
-            usage=usage,
-        )
+        Uses Pydantic ``model_validate`` so the camelCase wire format
+        (``runId``, ``inputTokens``, etc.) is handled automatically via
+        field aliases.
+        """
+        return Run.model_validate(data)

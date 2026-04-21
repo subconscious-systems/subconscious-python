@@ -3,10 +3,18 @@
 from typing import Any, Dict, List, Literal, Optional, Union
 from dataclasses import dataclass, field
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
-# Engine types
-Engine = Literal["tim", "tim-claude", "tim-claude-heavy"]
+# Engine types — matches public, non-deprecated engines from the monorepo.
+Engine = Literal[
+    "tim",
+    "tim-edge",
+    "tim-claude",
+    "tim-claude-heavy",
+    "tim-oss-local",
+    "tim-1.5",
+    "tim-gpt-heavy-tc",
+]
 
 
 # JSON Schema types for structured output
@@ -40,10 +48,8 @@ def pydantic_to_schema(model: type, title: Optional[str] = None) -> OutputSchema
     Returns:
         An OutputSchema compatible with answerFormat/reasoningFormat
     """
-    # Get the JSON Schema from Pydantic
     schema = model.model_json_schema()
     
-    # Create the output schema
     result = OutputSchema({
         "type": "object",
         "title": title or schema.get("title", model.__name__),
@@ -51,7 +57,6 @@ def pydantic_to_schema(model: type, title: Optional[str] = None) -> OutputSchema
         "required": schema.get("required", list(schema.get("properties", {}).keys())),
     })
     
-    # Include $defs if present (for complex nested types)
     if "$defs" in schema:
         result["$defs"] = schema["$defs"]
     
@@ -61,59 +66,85 @@ def pydantic_to_schema(model: type, title: Optional[str] = None) -> OutputSchema
 RunStatus = Literal["queued", "running", "succeeded", "failed", "canceled", "timed_out"]
 
 
-@dataclass
-class ReasoningNode:
-    """A node in the reasoning tree."""
+# ---------------------------------------------------------------------------
+# Response types — Pydantic models mirroring the API wire format 1:1.
+# Field aliases match the camelCase keys returned by GET /v1/runs/:runId.
+# populate_by_name=True allows both snake_case and camelCase construction.
+# ---------------------------------------------------------------------------
 
-    title: str
-    thought: str
-    tooluse: List[Any] = field(default_factory=list)
-    subtask: List["ReasoningNode"] = field(default_factory=list)
-    conclusion: str = ""
+class AgentToolUse(BaseModel):
+    """A tool call within a reasoning step.
 
+    Maps to ``AgentToolUse`` in the monorepo (schemas/index.ts).
+    """
+    model_config = ConfigDict(populate_by_name=True)
 
-@dataclass
-class RunResult:
-    """The result of a completed run."""
-
-    answer: str
-    reasoning: Optional[ReasoningNode] = None
-
-
-@dataclass
-class ModelUsage:
-    """Token usage for a specific model."""
-
-    engine: str
-    input_tokens: int
-    output_tokens: int
-    total_tokens: int
+    tool_name: str
+    tool_call_id: Optional[str] = None
+    parameters: Dict[str, Any] = Field(default_factory=dict)
+    tool_result: Optional[Any] = None
 
 
-@dataclass
-class PlatformToolUsage:
-    """Usage statistics for a platform tool."""
+class ReasoningTask(BaseModel):
+    """A node in the reasoning tree. Recursive via ``subtasks``.
 
-    tool_id: str
-    calls: int
+    Maps to ``ReasoningTask`` in the monorepo (schemas/index.ts).
+    All fields are optional because the tree is built incrementally
+    during streaming.
+    """
+    model_config = ConfigDict(populate_by_name=True)
+
+    title: Optional[str] = None
+    thought: Optional[str] = None
+    tooluse: Optional[AgentToolUse] = None
+    subtasks: Optional[List["ReasoningTask"]] = None
+    conclusion: Optional[str] = None
 
 
-@dataclass
-class Usage:
-    """Usage statistics for a run."""
-
-    models: List[ModelUsage] = field(default_factory=list)
-    platform_tools: List[PlatformToolUsage] = field(default_factory=list)
+# Deprecated alias — use ReasoningTask instead.
+ReasoningNode = ReasoningTask
 
 
-@dataclass
-class Run:
-    """Represents an agent run."""
+class RunResult(BaseModel):
+    """The result of a completed run.
 
-    run_id: str
+    Maps to ``ReasoningOutput`` in the monorepo (schemas/index.ts).
+    """
+    answer: str = ""
+    reasoning: Optional[List[ReasoningTask]] = None
+
+
+class Usage(BaseModel):
+    """Token usage for a run.
+
+    Maps to ``RunUsage`` in the monorepo (schemas/index.ts).
+    Flat structure matching the API wire format exactly.
+    """
+    model_config = ConfigDict(populate_by_name=True)
+
+    input_tokens: int = Field(default=0, alias="inputTokens")
+    output_tokens: int = Field(default=0, alias="outputTokens")
+    duration_ms: Optional[int] = Field(default=None, alias="durationMs")
+
+
+class RunError(BaseModel):
+    """Error details for a failed run.
+
+    Maps to ``RunError`` in the monorepo (schemas/index.ts).
+    """
+    code: str = ""
+    message: str = ""
+
+
+class Run(BaseModel):
+    """Represents an agent run — mirrors GET /v1/runs/:runId response."""
+    model_config = ConfigDict(populate_by_name=True)
+
+    run_id: str = Field(default="", alias="runId")
     status: Optional[RunStatus] = None
     result: Optional[RunResult] = None
     usage: Optional[Usage] = None
+    error: Optional[RunError] = None
 
 
 # Tool types

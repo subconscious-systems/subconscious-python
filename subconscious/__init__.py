@@ -19,11 +19,12 @@ from .types import (
     RunInput,
     RunOptions,
     RunParams,
+    RunError,
+    ReasoningTask,
     ReasoningNode,
+    AgentToolUse,
     Engine,
     Usage,
-    ModelUsage,
-    PlatformToolUsage,
     PollOptions,
     # Tool types
     Tool,
@@ -59,7 +60,7 @@ from .errors import (
     ValidationError,
 )
 
-__version__ = "0.3.0"
+__version__ = "1.0.0"
 __author__ = "Subconscious Systems"
 __email__ = "contact@subconscious.dev"
 
@@ -90,11 +91,12 @@ __all__ = [
     "RunInput",
     "RunOptions",
     "RunParams",
+    "RunError",
+    "ReasoningTask",
     "ReasoningNode",
+    "AgentToolUse",
     "Engine",
     "Usage",
-    "ModelUsage",
-    "PlatformToolUsage",
     "PollOptions",
     # Tool types
     "Tool",

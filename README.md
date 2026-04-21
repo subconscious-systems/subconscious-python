@@ -496,8 +496,15 @@ The main client class.
 
 ## Requirements
 
-- Python ≥ 3.8
+- Python ≥ 3.10
 - requests
+- pydantic ≥ 2.0
+
+## Upgrading
+
+If you're upgrading from 0.x, see the
+[Migration Guide](https://github.com/subconscious-systems/subconscious-python/blob/main/.cursor/skills/sdk-migration/SKILL.md)
+for breaking changes and code examples.
 
 ## Contributing
 
