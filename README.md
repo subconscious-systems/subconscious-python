@@ -1,20 +1,10 @@
-<p align="center">
-  <img src="https://www.subconscious.dev/logo.svg" alt="Subconscious" width="64" height="64">
-</p>
 
-<h1 align="center">Subconscious SDK</h1>
 
-<p align="center">
-  The official Python SDK for the <a href="https://subconscious.dev">Subconscious API</a>
-</p>
+# Subconscious SDK
 
-<p align="center">
-  <a href="https://pypi.org/project/subconscious-sdk/"><img src="https://img.shields.io/pypi/v/subconscious-sdk.svg" alt="PyPI version"></a>
-  <a href="https://pypi.org/project/subconscious-sdk/"><img src="https://img.shields.io/pypi/dm/subconscious-sdk.svg" alt="PyPI downloads"></a>
-  <a href="https://docs.subconscious.dev"><img src="https://img.shields.io/badge/docs-subconscious.dev-blue" alt="docs"></a>
-  <img src="https://img.shields.io/badge/python-%3E%3D3.8-brightgreen" alt="python version">
-  <a href="https://github.com/subconscious-systems/subconscious-sdk"><img src="https://img.shields.io/pypi/l/subconscious-sdk.svg" alt="license"></a>
-</p>
+The official Python SDK for the [Subconscious API](https://subconscious.dev)
+
+
 
 ---
 
@@ -38,7 +28,7 @@ from subconscious import Subconscious
 client = Subconscious(api_key="your-api-key")
 
 run = client.run(
-    engine="tim-gpt",
+    engine="tim-claude",
     input={
         "instructions": "Search for the latest AI news and summarize the top 3 stories",
         "tools": [{"type": "platform", "id": "fast_search"}],
@@ -191,19 +181,21 @@ For advanced use cases, you can also specify a `reasoningFormat` to structure th
 
 **Simple Search Tools** — Use these tools to get started quickly in our playground or with our API. For example: `{"type": "platform", "id": "fast_search"}`.
 
-| Tool Name             | API Name               | Description                                                |
-| --------------------- | ---------------------- | ---------------------------------------------------------- |
-| Fast Search            | `fast_search`          | Extremely fast search for simple factual lookups           |
-| Web Search             | `web_search`           | Comprehensive web search for detailed research            |
-| Fresh Search           | `fresh_search`         | Search the web for content from the last 7 days            |
-| Page Reader            | `page_reader`          | Extract content from a specific webpage URL                 |
-| Find Similar           | `find_similar`         | Find similar links to a given URL                           |
-| People Search          | `people_search`        | Search for people, profiles, and bios                      |
-| Company Search         | `company_search`       | Search for companies, funding info, and business details   |
-| News Search            | `news_search`          | Search for news articles and press coverage                |
-| Tweet Search           | `tweet_search`         | Search for tweets and Twitter/X discussions                |
-| Research Paper Search  | `research_paper_search`| Search for academic research papers and studies            |
-| Google Search          | `google_search`        | Search the web using Google                                 |
+
+| Tool Name             | API Name                | Description                                              |
+| --------------------- | ----------------------- | -------------------------------------------------------- |
+| Fast Search           | `fast_search`           | Extremely fast search for simple factual lookups         |
+| Web Search            | `web_search`            | Comprehensive web search for detailed research           |
+| Fresh Search          | `fresh_search`          | Search the web for content from the last 7 days          |
+| Page Reader           | `page_reader`           | Extract content from a specific webpage URL              |
+| Find Similar          | `find_similar`          | Find similar links to a given URL                        |
+| People Search         | `people_search`         | Search for people, profiles, and bios                    |
+| Company Search        | `company_search`        | Search for companies, funding info, and business details |
+| News Search           | `news_search`           | Search for news articles and press coverage              |
+| Tweet Search          | `tweet_search`          | Search for tweets and Twitter/X discussions              |
+| Research Paper Search | `research_paper_search` | Search for academic research papers and studies          |
+| Google Search         | `google_search`         | Search the web using Google                              |
+
 
 ```python
 # Platform tools (hosted by Subconscious)
@@ -241,8 +233,8 @@ mcp_tool = {
 
 Function tools support two powerful features for injecting data at call time:
 
-- **`headers`**: HTTP headers sent with the request to your tool endpoint
-- **`defaults`**: Parameter values hidden from the model and injected automatically
+- `**headers**`: HTTP headers sent with the request to your tool endpoint
+- `**defaults**`: Parameter values hidden from the model and injected automatically
 
 ```python
 tool_with_headers_and_defaults = {
@@ -278,10 +270,12 @@ tool_with_headers_and_defaults = {
 
 **How it works:**
 
+
 | Feature    | Where it goes                         | When                    |
 | ---------- | ------------------------------------- | ----------------------- |
 | `headers`  | HTTP request headers                  | Sent to your tool's URL |
 | `defaults` | Merged into request body `parameters` | At tool call time       |
+
 
 **Default arguments flow:**
 
@@ -301,10 +295,12 @@ Connect to any [Model Context Protocol](https://modelcontextprotocol.io/) server
 
 MCP servers that require authentication accept an `auth` object. The auth translates to an HTTP header sent with every tool call:
 
-| Method | When to use | Header sent |
-| --- | --- | --- |
-| **Bearer** | Most common — OAuth tokens, JWTs, etc. | `Authorization: Bearer <token>` |
-| **API key** | Service-specific API keys | `<header>: <token>` (header is typically `X-Api-Key` — check your MCP server's docs) |
+
+| Method      | When to use                            | Header sent                                                                          |
+| ----------- | -------------------------------------- | ------------------------------------------------------------------------------------ |
+| **Bearer**  | Most common — OAuth tokens, JWTs, etc. | `Authorization: Bearer <token>`                                                      |
+| **API key** | Service-specific API keys              | `<header>: <token>` (header is typically `X-Api-Key` — check your MCP server's docs) |
+
 
 ```python
 from subconscious import Subconscious, MCPTool, McpAuth
@@ -373,14 +369,16 @@ run = client.run(
 )
 ```
 
-**`allowedTools` filtering:**
+`**allowedTools` filtering:**
 
-| Value | Behavior |
-| --- | --- |
-| Omitted / `None` | All tools from the server are enabled |
-| `["*"]` | All tools enabled (explicit wildcard) |
-| `["search", "fetch"]` | Only these tools (case-insensitive) |
-| `[]` | No tools (blocks all) |
+
+| Value                 | Behavior                              |
+| --------------------- | ------------------------------------- |
+| Omitted / `None`      | All tools from the server are enabled |
+| `["*"]`               | All tools enabled (explicit wildcard) |
+| `["search", "fetch"]` | Only these tools (case-insensitive)   |
+| `[]`                  | No tools (blocks all)                 |
+
 
 You can also pass MCP tools as plain dicts:
 
@@ -452,12 +450,15 @@ The main client class.
 
 #### Constructor Options
 
+
 | Option     | Type  | Required | Default                           |
 | ---------- | ----- | -------- | --------------------------------- |
 | `api_key`  | `str` | Yes      | -                                 |
 | `base_url` | `str` | No       | `https://api.subconscious.dev/v1` |
 
+
 #### Methods
+
 
 | Method                        | Description           |
 | ----------------------------- | --------------------- |
@@ -467,7 +468,9 @@ The main client class.
 | `wait(run_id, options)`       | Poll until completion |
 | `cancel(run_id)`              | Cancel a running run  |
 
+
 ### Engines
+
 
 | Engine          | Type     | Description                                                                     | Input    | Output    |
 | --------------- | -------- | ------------------------------------------------------------------------------- | -------- | --------- |
@@ -477,7 +480,9 @@ The main client class.
 | `tim-gpt`       | Compound | Complex reasoning engine for long-context and tool use backed by OpenAI GPT-4.1 | $2.00/1M | $8.00/1M  |
 | `tim-gpt-heavy` | Compound | Complex reasoning engine for long-context and tool use backed by OpenAI GPT-5.2 | $2.00/1M | $15.00/1M |
 
+
 ### Run Status
+
 
 | Status      | Description            |
 | ----------- | ---------------------- |
@@ -487,6 +492,7 @@ The main client class.
 | `failed`    | Encountered an error   |
 | `canceled`  | Manually canceled      |
 | `timed_out` | Exceeded time limit    |
+
 
 ## Requirements
 
@@ -505,5 +511,6 @@ Apache-2.0
 
 For support and questions:
 
-- Documentation: https://docs.subconscious.dev
+- Documentation: [https://docs.subconscious.dev](https://docs.subconscious.dev)
 - Email: {hongyin,jack}@subconscious.dev
+

@@ -82,13 +82,7 @@ def test_content_has_images_handles_pydantic_and_dict():
 
 def test_engine_supports_images_snapshot():
     assert engine_supports_images('tim-claude') is True
-    assert engine_supports_images('tim-gpt') is True
-    assert engine_supports_images('timini') is True
-    assert engine_supports_images('tim') is True
-    assert engine_supports_images('tim-edge') is True
-    # Non-image engines from the snapshot
-    assert engine_supports_images('tim-oss-local') is False
-    assert engine_supports_images('tim-1.5') is False
+    assert engine_supports_images('tim-claude-heavy') is True
     # Unknown engine — fail closed
     assert engine_supports_images('unknown-engine') is False
 

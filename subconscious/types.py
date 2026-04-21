@@ -3,8 +3,10 @@
 from typing import Any, Dict, List, Literal, Optional, Union
 from dataclasses import dataclass, field
 
+from pydantic import BaseModel, ConfigDict
+
 # Engine types
-Engine = Literal["tim-edge", "tim-gpt", "tim-gpt-heavy"]
+Engine = Literal["tim", "tim-claude", "tim-claude-heavy"]
 
 
 # JSON Schema types for structured output
@@ -199,6 +201,97 @@ class MCPTool:
 Tool = Union[PlatformTool, FunctionTool, MCPTool, Dict[str, Any]]
 
 
+# Multimodal content — mirrors packages/common/schemas/index.ts (TextContent,
+# ImageContent, ImageSource*). Hand-written to replace the earlier
+# datamodel-codegen pipeline; the SDK only needs the input-side surface.
+ImageMime = Literal["image/png", "image/jpeg", "image/gif", "image/webp"]
+
+
+class TextContent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["text"]
+    text: str
+
+
+class ImageSourceBase64(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["base64"]
+    data: str
+    mime: ImageMime
+
+
+class ImageSourceBlobRef(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["blob_ref"]
+    blob_key: str
+    mime: ImageMime
+    width: Optional[int] = None
+    height: Optional[int] = None
+    size_bytes: Optional[int] = None
+    attachment_id: Optional[str] = None
+
+
+class ImageSourceUrl(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["url"]
+    url: str
+    mime: Optional[ImageMime] = None
+
+
+ImageSource = Union[ImageSourceBase64, ImageSourceBlobRef, ImageSourceUrl]
+
+
+class ImageContent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["image"]
+    source: ImageSource
+
+
+ContentBlock = Union[TextContent, ImageContent]
+
+
+# Flexible input accepted by ToolResponse.build().
+ToolResponseContent = Union[
+    str,
+    TextContent,
+    ImageContent,
+    List[Union[str, TextContent, ImageContent]],
+]
+
+
+class ToolResponse(BaseModel):
+    """Canonical envelope returned by a FunctionTool HTTP endpoint.
+
+    Reuses the ContentBlock union (TextContent | ImageContent) from run input.
+    Use ``ToolResponse.build(tool_call_id, content)`` to wrap plain strings,
+    a single content block, or a mixed list; the strict constructor
+    ``ToolResponse(tool_call_id=..., content=[...])`` remains available for
+    callers holding already-normalized blocks.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    tool_call_id: str
+    content: List[ContentBlock]
+    is_error: bool = False
+
+    @classmethod
+    def build(
+        cls,
+        tool_call_id: str,
+        content: ToolResponseContent,
+        *,
+        is_error: bool = False,
+    ) -> "ToolResponse":
+        """Build a tool response from text, an image, or a mixed list."""
+        def _wrap(item: Union[str, TextContent, ImageContent]) -> ContentBlock:
+            if isinstance(item, str):
+                return TextContent(type="text", text=item)
+            return item
+
+        blocks = [_wrap(i) for i in content] if isinstance(content, list) else [_wrap(content)]
+        return cls(tool_call_id=tool_call_id, content=blocks, is_error=is_error)
+
+
 @dataclass
 class RunInput:
     """Input configuration for a run."""
@@ -209,10 +302,9 @@ class RunInput:
     """JSON Schema for the answer output format. Use pydantic_to_schema() to generate from Pydantic."""
     reasoning_format: Optional[OutputSchema] = None
     """JSON Schema for the reasoning output format. Use pydantic_to_schema() to generate from Pydantic."""
-    content: Optional[List[Any]] = None
-    """Canonical multimodal content blocks. Each item is a TextContent or ImageContent
-    (Pydantic models from subconscious._schemas, or plain dicts matching the same shape).
-    Use the ``Image`` helper to build ImageContent blocks from a path/bytes/URL/blob_key."""
+    content: Optional[List[ContentBlock]] = None
+    """Canonical multimodal content blocks (TextContent or ImageContent). Use the
+    ``Image`` helper to build ImageContent blocks from a path/bytes/URL/blob_key."""
 
 
 @dataclass

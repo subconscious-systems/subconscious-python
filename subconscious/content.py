@@ -21,13 +21,11 @@ import urllib.request
 from pathlib import Path
 from typing import Optional, Union
 
-from ._schemas.content_block import (
-    ContentBlock,
+from .types import (
     ImageContent,
     ImageSourceBase64,
     ImageSourceBlobRef,
     ImageSourceUrl,
-    TextContent,
 )
 
 # Mirror packages/common/schemas/content-block.ts MIME_ALLOWED.
@@ -109,12 +107,4 @@ class Image:
         )
 
 
-__all__ = [
-    'Image',
-    'TextContent',
-    'ImageContent',
-    'ContentBlock',
-    'ImageSourceBase64',
-    'ImageSourceBlobRef',
-    'ImageSourceUrl',
-]
+__all__ = ['Image']

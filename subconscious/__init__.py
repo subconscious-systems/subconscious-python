@@ -10,16 +10,7 @@ from ._capabilities import (
     engine_supports_images,
 )
 from .client import RequestTooLargeError, Subconscious
-from .content import (
-    ContentBlock,
-    Image,
-    ImageContent,
-    ImageSourceBase64,
-    ImageSourceBlobRef,
-    ImageSourceUrl,
-    TextContent,
-)
-from .traces import densify_trace
+from .content import Image
 from .types import (
     # Run types
     Run,
@@ -40,6 +31,17 @@ from .types import (
     FunctionTool,
     MCPTool,
     McpAuth,
+    # Multimodal content
+    ContentBlock,
+    TextContent,
+    ImageContent,
+    ImageSource,
+    ImageSourceBase64,
+    ImageSourceBlobRef,
+    ImageSourceUrl,
+    ImageMime,
+    # Tool response
+    ToolResponse,
     # Stream events
     StreamEvent,
     DeltaEvent,
@@ -70,15 +72,17 @@ __all__ = [
     "ContentBlock",
     "TextContent",
     "ImageContent",
+    "ImageSource",
     "ImageSourceBase64",
     "ImageSourceBlobRef",
     "ImageSourceUrl",
+    "ImageMime",
+    # Tool response
+    "ToolResponse",
     # Capability helpers
     "engine_supports_images",
     "SUGGESTED_IMAGE_ENGINES",
     "EngineDoesNotSupportImagesError",
-    # Trace utilities
-    "densify_trace",
     # Run types
     "Run",
     "RunStatus",

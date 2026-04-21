@@ -1,9 +1,7 @@
 """Frozen snapshot of engine capability metadata.
 
 Mirrors `packages/common/engines.ts` ENGINE_DATA[engine].supports.images.
-Synced manually for now; a future iteration may pull this from the
-``GET /v1/capabilities`` endpoint or the published `subconscious-sdk-core`
-artifact (post-MM Phase 1).
+Synced manually for now.
 
 Update this whenever the monorepo flips an engine's `supports.images` flag.
 """
@@ -12,19 +10,10 @@ from __future__ import annotations
 
 from typing import FrozenSet
 
-# Snapshot generated from packages/common/engines.ts on 2026-04-17.
 _IMAGE_CAPABLE_ENGINES: FrozenSet[str] = frozenset(
     {
-        # Compound engines — image support GA via TIM-large.
-        'tim-gpt',
-        'tim-gpt-heavy',
-        'tim-gpt-heavy-tc',
         'tim-claude',
         'tim-claude-heavy',
-        'timini',
-        # Unified engines — gated by MM_UNIFIED_IMAGE_ENABLED on the server.
-        'tim',
-        'tim-edge',
     }
 )
 
@@ -32,9 +21,6 @@ _IMAGE_CAPABLE_ENGINES: FrozenSet[str] = frozenset(
 SUGGESTED_IMAGE_ENGINES = (
     'tim-claude',
     'tim-claude-heavy',
-    'tim-gpt',
-    'tim-gpt-heavy',
-    'timini',
 )
 
 

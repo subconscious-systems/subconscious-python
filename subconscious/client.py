@@ -127,9 +127,8 @@ def _normalize_tool(tool: Any) -> Dict[str, Any]:
 def _normalize_content_block(block: Any) -> Any:
     """Convert a Pydantic ContentBlock (or dict) to a JSON-ready dict.
 
-    The generated Pydantic models live under subconscious._schemas. We accept
-    either model instances or already-dict blocks the user constructed by hand
-    (matching the JSON Schema shape).
+    Accepts either a ``TextContent``/``ImageContent`` model (from
+    ``subconscious.types``) or a plain dict matching the same shape.
     """
     if hasattr(block, "model_dump"):
         return block.model_dump(mode="json", exclude_none=True)

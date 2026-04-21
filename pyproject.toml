@@ -39,7 +39,6 @@ dev = [
     "isort>=5.0.0",
     "mypy>=1.0.0",
     "types-requests>=2.28.0",
-    "datamodel-code-generator>=0.25.0",
 ]
 
 [project.urls]
