@@ -17,6 +17,7 @@ from .errors import (
 from .types import (
     AgentToolUse,
     # Multimodal content
+    AudioContent,
     ContentBlock,
     # Wire-format request models
     CreateRunBody,
@@ -24,6 +25,7 @@ from .types import (
     DoneEvent,
     Engine,
     ErrorEvent,
+    FileContent,
     FunctionTool,
     ImageContent,
     ImageMime,
@@ -47,6 +49,11 @@ from .types import (
     RunParams,
     RunResult,
     RunStatus,
+    # General source types (audio / file)
+    Source,
+    SourceBase64,
+    SourceBlobRef,
+    SourceUrl,
     # Stream events
     StreamEvent,
     TextContent,
@@ -79,6 +86,12 @@ __all__ = [
     'ImageSourceBlobRef',
     'ImageSourceUrl',
     'ImageMime',
+    'AudioContent',
+    'FileContent',
+    'Source',
+    'SourceBase64',
+    'SourceBlobRef',
+    'SourceUrl',
     # Tool response
     'ToolResponse',
     # Run types

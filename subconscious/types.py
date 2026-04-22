@@ -2,9 +2,9 @@
 
 import json
 from dataclasses import dataclass, field
-from typing import Any, ClassVar, Literal
+from typing import Annotated, Any, ClassVar, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Discriminator, Field
 
 from .errors import RequestTooLargeError
 
@@ -288,17 +288,63 @@ class ImageContent(BaseModel):
     source: ImageSource
 
 
-ContentBlock = TextContent | ImageContent
+# General source types for audio and file content — accept any valid MIME string.
+# Mirrors SourceBase64 / SourceBlobRef / SourceUrl in timlarge/src/timlarge/types.py.
+class SourceBase64(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    kind: Literal['base64']
+    data: str
+    mime: str
+
+
+class SourceBlobRef(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    kind: Literal['blob_ref']
+    blob_key: str
+    mime: str
+    size_bytes: int | None = None
+    attachment_id: str | None = None
+
+
+class SourceUrl(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    kind: Literal['url']
+    url: str
+    mime: str | None = None
+
+
+Source = Annotated[SourceBase64 | SourceBlobRef | SourceUrl, Discriminator('kind')]
+
+
+class AudioContent(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    type: Literal['audio']
+    source: Source
+
+
+class FileContent(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    type: Literal['file']
+    source: Source
+    filename: str | None = None
+    mime: str | None = None
+
+
+ContentBlock = Annotated[
+    TextContent | ImageContent | AudioContent | FileContent,
+    Discriminator('type'),
+]
 
 
 # Flexible input accepted by ToolResponse.build().
-ToolResponseContent = str | TextContent | ImageContent | list[str | TextContent | ImageContent]
+_ToolResponseItem = str | TextContent | ImageContent | AudioContent | FileContent
+ToolResponseContent = _ToolResponseItem | list[_ToolResponseItem]
 
 
 class ToolResponse(BaseModel):
     """Canonical envelope returned by a FunctionTool HTTP endpoint.
 
-    Reuses the ContentBlock union (TextContent | ImageContent) from run input.
+    Reuses the ContentBlock union (text, image, audio, file) from run input.
     Use ``ToolResponse.build(tool_call_id, content)`` to wrap plain strings,
     a single content block, or a mixed list; the strict constructor
     ``ToolResponse(tool_call_id=..., content=[...])`` remains available for
@@ -306,21 +352,21 @@ class ToolResponse(BaseModel):
     """
 
     model_config = ConfigDict(extra='forbid')
-    tool_call_id: str
+    tool_call_id: str | None = None
     content: list[ContentBlock]
     is_error: bool = False
 
     @classmethod
     def build(
         cls,
-        tool_call_id: str,
+        tool_call_id: str | None,
         content: ToolResponseContent,
         *,
         is_error: bool = False,
     ) -> 'ToolResponse':
-        """Build a tool response from text, an image, or a mixed list."""
+        """Build a tool response from text, an image, audio, a file, or a mixed list."""
 
-        def _wrap(item: str | TextContent | ImageContent) -> ContentBlock:
+        def _wrap(item: _ToolResponseItem) -> ContentBlock:
             if isinstance(item, str):
                 return TextContent(type='text', text=item)
             return item
@@ -371,6 +417,7 @@ class RunInputWire(BaseModel):
     instructions: str
     tools: list[dict[str, Any]] = Field(default_factory=list)
     content: list[dict[str, Any]] | None = None
+    resources: list[str] | None = None
     answer_format: dict[str, Any] | None = Field(default=None, alias='answerFormat')
     reasoning_format: dict[str, Any] | None = Field(default=None, alias='reasoningFormat')
 
@@ -403,6 +450,7 @@ class RunInputWire(BaseModel):
                 if raw.get('content')
                 else None
             ),
+            resources=raw.get('resources') or None,
             answer_format=cls._resolve_schema(raw.get('answerFormat')),
             reasoning_format=cls._resolve_schema(raw.get('reasoningFormat')),
         )
