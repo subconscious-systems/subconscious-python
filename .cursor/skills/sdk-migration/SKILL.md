@@ -18,7 +18,7 @@ and their fields match the JSON returned by the Subconscious API 1:1.
 
 - `Usage` is now a flat Pydantic model (`input_tokens`, `output_tokens`, `duration_ms`). The old `models` and `platform_tools` fields are removed.
 - `ModelUsage` and `PlatformToolUsage` are deleted entirely.
-- `ReasoningNode` is renamed to `ReasoningTask` (alias kept for backward compat).
+- `ReasoningNode` is removed. Use `ReasoningTask` instead.
 - `ReasoningTask.subtask` is renamed to `subtasks`.
 - `ReasoningTask.tooluse` is now `Optional[AgentToolUse]` instead of `List[Any]`.
 - `RunResult.reasoning` is now `Optional[List[ReasoningTask]]` instead of `Optional[ReasoningNode]`.
@@ -47,8 +47,8 @@ from subconscious import ReasoningNode
 node.subtask       # List[ReasoningNode]
 node.tooluse       # List[Any]
 
-# 1.0
-from subconscious import ReasoningTask  # or ReasoningNode (deprecated alias)
+# 1.0 — ReasoningNode is removed
+from subconscious import ReasoningTask
 task.subtasks      # Optional[List[ReasoningTask]]
 task.tooluse       # Optional[AgentToolUse]
 task.tooluse.tool_name       # str
@@ -83,6 +83,7 @@ if run.status == "failed" and run.error:
 # 0.x — these imports will fail in 1.0
 from subconscious import ModelUsage       # REMOVED
 from subconscious import PlatformToolUsage  # REMOVED
+from subconscious import ReasoningNode    # REMOVED
 
 # 1.0 — new exports
 from subconscious import AgentToolUse
@@ -127,8 +128,9 @@ Engine = Literal[
 |---|---|
 | `from subconscious import ModelUsage` | Remove — no longer exists |
 | `from subconscious import PlatformToolUsage` | Remove — no longer exists |
+| `from subconscious import ReasoningNode` | `from subconscious import ReasoningTask` |
 | `run.usage.models` | `run.usage.input_tokens` / `run.usage.output_tokens` |
 | `run.usage.platform_tools` | Remove — no longer exists |
-| `.subtask` (on ReasoningNode/Task) | `.subtasks` |
-| `ReasoningNode` (in type hints) | `ReasoningTask` (alias still works at runtime) |
+| `.subtask` (on ReasoningTask) | `.subtasks` |
+| `ReasoningNode` (in type hints/code) | `ReasoningTask` |
 | `run.result.reasoning.title` | `run.result.reasoning[0].title` (now a list) |

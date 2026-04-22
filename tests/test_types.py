@@ -8,7 +8,6 @@ from subconscious.types import (
     McpAuth,
     MCPTool,
     PlatformTool,
-    ReasoningNode,
     ReasoningTask,
     Run,
     RunError,
@@ -264,12 +263,6 @@ class TestParseRun:
         assert run.usage.duration_ms is None
         assert run.usage.input_tokens == 1
         assert run.usage.output_tokens == 1
-
-    def test_reasoning_node_alias_is_reasoning_task(self):
-        """ReasoningNode is a deprecated alias for ReasoningTask."""
-        assert ReasoningNode is ReasoningTask
-        node = ReasoningNode(title="test", thought="thinking")
-        assert isinstance(node, ReasoningTask)
 
     def test_multiple_reasoning_tasks(self):
         data = {

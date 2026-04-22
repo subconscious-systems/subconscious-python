@@ -101,10 +101,6 @@ class ReasoningTask(BaseModel):
     conclusion: Optional[str] = None
 
 
-# Deprecated alias — use ReasoningTask instead.
-ReasoningNode = ReasoningTask
-
-
 class RunResult(BaseModel):
     """The result of a completed run.
 
