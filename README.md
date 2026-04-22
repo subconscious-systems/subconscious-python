@@ -1,21 +1,15 @@
-
-
 # Subconscious SDK
 
-The official Python SDK for the [Subconscious API](https://subconscious.dev)
-
-
+The official Python SDK for the [Subconscious API](https://subconscious.dev).
 
 ---
 
 ## Installation
 
 ```bash
-pip install subconscious-sdk
-# or
 uv add subconscious-sdk
 # or
-poetry add subconscious-sdk
+pip install subconscious-sdk
 ```
 
 > **Note**: The package name is `subconscious-sdk` but you import it as `subconscious`.
@@ -51,7 +45,7 @@ The simplest way to use the SDK—create a run and wait for completion:
 
 ```python
 run = client.run(
-    engine="tim-gpt",
+    engine="tim-claude",
     input={
         "instructions": "Analyze the latest trends in renewable energy",
         "tools": [{"type": "platform", "id": "fast_search"}],
@@ -69,7 +63,7 @@ Start a run without waiting, then check status later:
 
 ```python
 run = client.run(
-    engine="tim-gpt",
+    engine="tim-claude",
     input={
         "instructions": "Generate a comprehensive report",
         "tools": [],
@@ -87,7 +81,7 @@ print(status.status)  # 'queued' | 'running' | 'succeeded' | 'failed' | 'cancele
 
 ```python
 run = client.run(
-    engine="tim-gpt",
+    engine="tim-claude",
     input={
         "instructions": "Complex task",
         "tools": [{"type": "platform", "id": "fast_search"}],
@@ -110,7 +104,7 @@ Stream text as it's generated:
 
 ```python
 for event in client.stream(
-    engine="tim-gpt",
+    engine="tim-claude",
     input={
         "instructions": "Write a short essay about space exploration",
         "tools": [{"type": "platform", "id": "fast_search"}],
@@ -132,7 +126,7 @@ Attach reusable knowledge packages to your runs. Skills use progressive disclosu
 
 ```python
 run = client.run(
-    engine="tim-gpt",
+    engine="tim-claude",
     input={
         "instructions": "Build a REST API following our team standards",
         "tools": [{"type": "platform", "id": "web_search"}],
@@ -160,7 +154,7 @@ class AnalysisResult(BaseModel):
 client = Subconscious(api_key="your-api-key")
 
 run = client.run(
-    engine="tim-gpt",
+    engine="tim-claude",
     input={
         "instructions": "Analyze the latest news about electric vehicles",
         "tools": [{"type": "platform", "id": "fast_search"}],
@@ -177,25 +171,78 @@ The SDK automatically converts your Pydantic model to JSON Schema. You can also 
 
 For advanced use cases, you can also specify a `reasoningFormat` to structure the agent's reasoning output.
 
+### Multimodal Input (Images)
+
+Send images alongside text instructions using the `Image` helper:
+
+```python
+from subconscious import Subconscious, Image
+
+client = Subconscious(api_key="your-api-key")
+
+# From a local file
+run = client.run(
+    engine="tim-claude",
+    input={
+        "instructions": "Describe what you see in this image",
+        "content": [Image.from_path("photo.png")],
+    },
+    options={"await_completion": True},
+)
+
+print(run.result.answer)
+```
+
+`Image` supports several sources:
+
+```python
+# From a URL (server-side fetch)
+Image.from_url("https://example.com/photo.jpg")
+
+# From a URL (client-side fetch, embeds as base64)
+Image.from_url("https://example.com/photo.jpg", fetch=True)
+
+# From raw bytes
+Image.from_bytes(image_bytes)
+
+# From a previously uploaded blob
+Image.from_blob_ref(blob_key="abc123", mime="image/png")
+```
+
+Supported formats: PNG, JPEG, GIF, and WebP.
+
+### Image Tool Responses
+
+If you have a function tool that generates or fetches an image, return it as a `ToolResponse` with mixed text and image content. The agent will see the image and can reason about it. This is useful for tools that generate images, such as a screenshot tool for computer use.
+
+```python
+from subconscious import ToolResponse, Image
+
+# Your tool endpoint receives a tool_call_id from the agent.
+# Return an image alongside text using ToolResponse.build():
+response = ToolResponse.build(
+    tool_call_id="call_abc123",
+    content=[
+        "Here is the generated chart:",
+        Image.from_path("chart.png"),
+    ],
+)
+
+# Or from a URL
+response = ToolResponse.build(
+    tool_call_id="call_abc123",
+    content=[
+        "Screenshot captured successfully.",
+        Image.from_url("https://example.com/screenshot.png"),
+    ],
+)
+```
+
+`ToolResponse.build()` accepts a string, a single content block, or a mixed list of strings and `Image` blocks — it normalizes everything into the wire format automatically. You can use this when building custom tools to use with Subconscious.
+
 ### Tools
 
-**Simple Search Tools** — Use these tools to get started quickly in our playground or with our API. For example: `{"type": "platform", "id": "fast_search"}`.
-
-
-| Tool Name             | API Name                | Description                                              |
-| --------------------- | ----------------------- | -------------------------------------------------------- |
-| Fast Search           | `fast_search`           | Extremely fast search for simple factual lookups         |
-| Web Search            | `web_search`            | Comprehensive web search for detailed research           |
-| Fresh Search          | `fresh_search`          | Search the web for content from the last 7 days          |
-| Page Reader           | `page_reader`           | Extract content from a specific webpage URL              |
-| Find Similar          | `find_similar`          | Find similar links to a given URL                        |
-| People Search         | `people_search`         | Search for people, profiles, and bios                    |
-| Company Search        | `company_search`        | Search for companies, funding info, and business details |
-| News Search           | `news_search`           | Search for news articles and press coverage              |
-| Tweet Search          | `tweet_search`          | Search for tweets and Twitter/X discussions              |
-| Research Paper Search | `research_paper_search` | Search for academic research papers and studies          |
-| Google Search         | `google_search`         | Search the web using Google                              |
-
+**Platform tools** — Hosted search and retrieval tools like `fast_search`, `web_search`, `news_search`, and more. See the [tools documentation](https://docs.subconscious.dev/core-concepts/tools) for the full list.
 
 ```python
 # Platform tools (hosted by Subconscious)
@@ -309,7 +356,7 @@ client = Subconscious()
 
 # Basic — use all tools from an MCP server
 run = client.run(
-    engine="tim-gpt",
+    engine="tim-claude",
     input={
         "instructions": "Find my recent meeting notes",
         "tools": [
@@ -321,7 +368,7 @@ run = client.run(
 
 # Filter to specific tools
 run = client.run(
-    engine="tim-gpt",
+    engine="tim-claude",
     input={
         "instructions": "Search my documents",
         "tools": [
@@ -337,7 +384,7 @@ run = client.run(
 # With bearer auth (most common — e.g. OAuth tokens)
 # → sends header: { "Authorization": "Bearer <token>" }
 run = client.run(
-    engine="tim-gpt",
+    engine="tim-claude",
     input={
         "instructions": "Check my calendar",
         "tools": [
@@ -355,7 +402,7 @@ run = client.run(
 # The header name is typically "X-Api-Key" but may vary —
 # check the docs of the MCP server you are connecting to.
 run = client.run(
-    engine="tim-gpt",
+    engine="tim-claude",
     input={
         "instructions": "Query the database",
         "tools": [
@@ -414,7 +461,7 @@ Get a POST when runs complete instead of polling.
 
 ```python
 run = client.run(
-    engine="tim-gpt",
+    engine="tim-claude",
     input={"instructions": "Generate a report"},
     output={"callbackUrl": "https://your-server.com/webhook"},
 )
@@ -444,61 +491,16 @@ client.cancel(run.run_id)
 
 ## API Reference
 
-### `Subconscious`
+See the full [API documentation](https://docs.subconscious.dev) for detailed reference. The `Subconscious` client exposes five core methods: `run()`, `stream()`, `get()`, `wait()`, and `cancel()`.
 
-The main client class.
+For available engines and pricing, see the [pricing page](https://docs.subconscious.dev/pricing).
 
-#### Constructor Options
-
-
-| Option     | Type  | Required | Default                           |
-| ---------- | ----- | -------- | --------------------------------- |
-| `api_key`  | `str` | Yes      | -                                 |
-| `base_url` | `str` | No       | `https://api.subconscious.dev/v1` |
+A run's `status` field is one of: `queued`, `running`, `succeeded`, `failed`, `canceled`, or `timed_out`.
 
 
-#### Methods
+## Development
 
-
-| Method                        | Description           |
-| ----------------------------- | --------------------- |
-| `run(engine, input, options)` | Create a new run      |
-| `stream(engine, input)`       | Stream text deltas    |
-| `get(run_id)`                 | Get run status        |
-| `wait(run_id, options)`       | Poll until completion |
-| `cancel(run_id)`              | Cancel a running run  |
-
-
-### Engines
-
-
-| Engine          | Type     | Description                                                                     | Input    | Output    |
-| --------------- | -------- | ------------------------------------------------------------------------------- | -------- | --------- |
-| `tim`           | Unified  | Our flagship unified agent engine for a wide range of tasks                     | $2.00/1M | $8.00/1M  |
-| `tim-edge`      | Unified  | Highly efficient engine tuned for performance with search tools                 | $0.50/1M | $2.00/1M  |
-| `timini`        | Compound | Complex reasoning engine for long-context and tool use backed by Gemini-3 Flash | $2.00/1M | $12.00/1M |
-| `tim-gpt`       | Compound | Complex reasoning engine for long-context and tool use backed by OpenAI GPT-4.1 | $2.00/1M | $8.00/1M  |
-| `tim-gpt-heavy` | Compound | Complex reasoning engine for long-context and tool use backed by OpenAI GPT-5.2 | $2.00/1M | $15.00/1M |
-
-
-### Run Status
-
-
-| Status      | Description            |
-| ----------- | ---------------------- |
-| `queued`    | Waiting to start       |
-| `running`   | Currently executing    |
-| `succeeded` | Completed successfully |
-| `failed`    | Encountered an error   |
-| `canceled`  | Manually canceled      |
-| `timed_out` | Exceeded time limit    |
-
-
-## Requirements
-
-- Python ≥ 3.10
-- requests
-- pydantic ≥ 2.0
+We recommend [uv](https://docs.astral.sh/uv/) as your package manager. See `pyproject.toml` for Python version requirements and dependencies.
 
 ## Upgrading
 
@@ -510,14 +512,10 @@ for breaking changes and code examples.
 
 Contributions are welcome! Please feel free to submit a pull request.
 
-## License
-
-Apache-2.0
-
 ## Support
 
 For support and questions:
 
 - Documentation: [https://docs.subconscious.dev](https://docs.subconscious.dev)
-- Email: {hongyin,jack}@subconscious.dev
+- Email: {hongyin,jack,dana,wei}@subconscious.dev
 
