@@ -22,9 +22,9 @@ from pathlib import Path
 
 from .types import (
     ImageContent,
-    ImageSourceBase64,
-    ImageSourceBlobRef,
-    ImageSourceUrl,
+    SourceBase64,
+    SourceBlobRef,
+    SourceUrl,
 )
 
 # Mirror packages/common/schemas/content-block.ts MIME_ALLOWED.
@@ -55,10 +55,10 @@ class Image:
         mime = _detect_mime(data)
         return ImageContent(
             type='image',
-            source=ImageSourceBase64(
+            source=SourceBase64(
                 kind='base64',
                 data=base64.b64encode(data).decode('ascii'),
-                mime=mime,  # type: ignore[arg-type]
+                mime=mime,
             ),
         )
 
@@ -70,10 +70,10 @@ class Image:
             raise ValueError(f'mime {resolved_mime} not allowed')
         return ImageContent(
             type='image',
-            source=ImageSourceBase64(
+            source=SourceBase64(
                 kind='base64',
                 data=base64.b64encode(data).decode('ascii'),
-                mime=resolved_mime,  # type: ignore[arg-type]
+                mime=resolved_mime,
             ),
         )
 
@@ -89,17 +89,17 @@ class Image:
         if fetch:
             with urllib.request.urlopen(url) as resp:  # noqa: S310 — caller-controlled URL
                 return Image.from_bytes(resp.read())
-        return ImageContent(type='image', source=ImageSourceUrl(kind='url', url=url))  # type: ignore[arg-type]
+        return ImageContent(type='image', source=SourceUrl(kind='url', url=url))
 
     @staticmethod
     def from_blob_ref(blob_key: str, mime: str) -> ImageContent:
         """Reference an asset already stored server-side. Skip an upload roundtrip."""
         return ImageContent(
             type='image',
-            source=ImageSourceBlobRef(
+            source=SourceBlobRef(
                 kind='blob_ref',
                 blob_key=blob_key,
-                mime=mime,  # type: ignore[arg-type]
+                mime=mime,
             ),
         )
 

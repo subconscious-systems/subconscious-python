@@ -242,72 +242,32 @@ class MCPTool:
 Tool = PlatformTool | FunctionTool | MCPTool | dict[str, Any]
 
 
-# Multimodal content — mirrors packages/common/schemas/index.ts (TextContent,
-# ImageContent, ImageSource*). Hand-written to replace the earlier
-# datamodel-codegen pipeline; the SDK only needs the input-side surface.
-ImageMime = Literal['image/png', 'image/jpeg', 'image/gif', 'image/webp']
+# Multimodal content — mirrors timlarge/src/timlarge/types.py canonical types.
+# A single Source union is shared across all content blocks (text, image, audio, file).
 
 
 class TextContent(BaseModel):
-    model_config = ConfigDict(extra='forbid')
     type: Literal['text']
     text: str
 
 
-class ImageSourceBase64(BaseModel):
-    model_config = ConfigDict(extra='forbid')
-    kind: Literal['base64']
-    data: str
-    mime: ImageMime
-
-
-class ImageSourceBlobRef(BaseModel):
-    model_config = ConfigDict(extra='forbid')
-    kind: Literal['blob_ref']
-    blob_key: str
-    mime: ImageMime
-    width: int | None = None
-    height: int | None = None
-    size_bytes: int | None = None
-    attachment_id: str | None = None
-
-
-class ImageSourceUrl(BaseModel):
-    model_config = ConfigDict(extra='forbid')
-    kind: Literal['url']
-    url: str
-    mime: ImageMime | None = None
-
-
-ImageSource = ImageSourceBase64 | ImageSourceBlobRef | ImageSourceUrl
-
-
-class ImageContent(BaseModel):
-    model_config = ConfigDict(extra='forbid')
-    type: Literal['image']
-    source: ImageSource
-
-
-# General source types for audio and file content — accept any valid MIME string.
-# Mirrors SourceBase64 / SourceBlobRef / SourceUrl in timlarge/src/timlarge/types.py.
 class SourceBase64(BaseModel):
-    model_config = ConfigDict(extra='forbid')
     kind: Literal['base64']
     data: str
     mime: str
 
 
 class SourceBlobRef(BaseModel):
-    model_config = ConfigDict(extra='forbid')
     kind: Literal['blob_ref']
     blob_key: str
     mime: str
     size_bytes: int | None = None
     attachment_id: str | None = None
+    presigned_url: str | None = None
+    presigned_expires_at: str | None = None
 
 
 class SourceUrl(BaseModel):
-    model_config = ConfigDict(extra='forbid')
     kind: Literal['url']
     url: str
     mime: str | None = None
@@ -316,14 +276,17 @@ class SourceUrl(BaseModel):
 Source = Annotated[SourceBase64 | SourceBlobRef | SourceUrl, Discriminator('kind')]
 
 
+class ImageContent(BaseModel):
+    type: Literal['image']
+    source: Source
+
+
 class AudioContent(BaseModel):
-    model_config = ConfigDict(extra='forbid')
     type: Literal['audio']
     source: Source
 
 
 class FileContent(BaseModel):
-    model_config = ConfigDict(extra='forbid')
     type: Literal['file']
     source: Source
     filename: str | None = None
@@ -351,7 +314,6 @@ class ToolResponse(BaseModel):
     callers holding already-normalized blocks.
     """
 
-    model_config = ConfigDict(extra='forbid')
     tool_call_id: str | None = None
     content: list[ContentBlock]
     is_error: bool = False
@@ -381,6 +343,7 @@ class RunInput:
 
     instructions: str
     tools: list[Tool] = field(default_factory=list)
+    resources: list[str] | None = None
     answer_format: OutputSchema | None = None
     """JSON Schema for the answer output format. Use pydantic_to_schema() to generate from Pydantic."""
     reasoning_format: OutputSchema | None = None
@@ -432,6 +395,7 @@ class RunInputWire(BaseModel):
             return cls(
                 instructions=input.instructions,
                 tools=[cls._normalize_tool(t) for t in input.tools],
+                resources=input.resources or None,
                 content=(
                     [cls._normalize_content_block(b) for b in input.content]
                     if input.content

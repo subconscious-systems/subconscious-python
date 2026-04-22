@@ -28,11 +28,6 @@ from .types import (
     FileContent,
     FunctionTool,
     ImageContent,
-    ImageMime,
-    ImageSource,
-    ImageSourceBase64,
-    ImageSourceBlobRef,
-    ImageSourceUrl,
     McpAuth,
     MCPTool,
     # Structured output
@@ -49,7 +44,7 @@ from .types import (
     RunParams,
     RunResult,
     RunStatus,
-    # General source types (audio / file)
+    # Source types (shared across all content blocks)
     Source,
     SourceBase64,
     SourceBlobRef,
@@ -81,11 +76,6 @@ __all__ = [
     'ContentBlock',
     'TextContent',
     'ImageContent',
-    'ImageSource',
-    'ImageSourceBase64',
-    'ImageSourceBlobRef',
-    'ImageSourceUrl',
-    'ImageMime',
     'AudioContent',
     'FileContent',
     'Source',

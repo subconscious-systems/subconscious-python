@@ -66,29 +66,16 @@ def test_strict_constructor_round_trip():
     }
 
 
-def test_rejects_unsupported_mime():
-    with pytest.raises(ValidationError):
-        ToolResponse(
-            tool_call_id='tc_1',
-            content=[
-                {
-                    'type': 'image',
-                    'source': {'kind': 'base64', 'data': 'AAA', 'mime': 'image/bmp'},
-                },
-            ],
-        )
-
-
 # ---------------------------------------------------------------------------
 # Canonical wire-shape contract
 # ---------------------------------------------------------------------------
 #
 # These assertions pin the exact JSON structure the SDK sends to the API
 # for a tool response. They mirror the canonical ``ToolResponse`` /
-# ``ContentBlock`` / ``ImageSource`` zod schemas in
-# ``subconscious-monorepo/packages/common/schemas/index.ts``. If the
-# monorepo schema changes, these fail first — keeping the two sides in
-# sync without needing a live API round-trip.
+# ``ContentBlock`` / ``Source`` types in
+# ``timlarge/src/timlarge/types.py``. If the canonical types change,
+# these fail first — keeping the two sides in sync without needing a
+# live API round-trip.
 
 
 def test_wire_shape_text_only():
@@ -102,7 +89,7 @@ def test_wire_shape_image_base64_source():
         mode='json', exclude_none=True
     )
     source = dumped['content'][0]['source']
-    # Exactly the three keys the canonical ``ImageSourceBase64`` zod requires.
+    # Exactly the three keys the canonical ``SourceBase64`` requires.
     assert set(source.keys()) == {'kind', 'data', 'mime'}
     assert source['kind'] == 'base64'
     assert source['mime'] == 'image/png'
@@ -132,8 +119,6 @@ def test_wire_shape_image_blob_ref_source():
     assert source['blob_key'].startswith('org/')
     assert source['mime'] == 'image/png'
     # Optional fields excluded when unset — keeps the wire payload compact.
-    assert 'width' not in source
-    assert 'height' not in source
     assert 'attachment_id' not in source
 
 
@@ -340,7 +325,7 @@ def test_source_rejects_invalid_kind():
 
 
 def test_audio_accepts_arbitrary_mime():
-    # General Source types accept any MIME string (unlike ImageMime which is restricted).
+    # Source types accept any MIME string — no type-level restriction.
     audio = AudioContent(
         type='audio',
         source=SourceBase64(kind='base64', data='AAAA', mime='audio/ogg; codecs=opus'),
