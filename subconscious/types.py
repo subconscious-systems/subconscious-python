@@ -1,9 +1,12 @@
 """Type definitions for the Subconscious SDK."""
 
+import json
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from .errors import RequestTooLargeError
 
 # Engine types — matches public, non-deprecated engines from the monorepo.
 Engine = Literal[
@@ -339,6 +342,150 @@ class RunInput:
     content: list[ContentBlock] | None = None
     """Canonical multimodal content blocks (TextContent or ImageContent). Use the
     ``Image`` helper to build ImageContent blocks from a path/bytes/URL/blob_key."""
+
+
+# ---------------------------------------------------------------------------
+# Request wire-format models — Pydantic models for the POST /v1/runs body.
+# Mirrors the exact camelCase shape the API expects so the SDK validates
+# payload structure at construction time.
+# ---------------------------------------------------------------------------
+
+
+class RunInputWire(BaseModel):
+    """Wire-format model for the ``input`` field of POST /v1/runs.
+
+    Mirrors the exact camelCase shape the API expects, so the SDK can
+    validate the payload structure at construction time rather than
+    discovering mismatches at the network boundary.
+
+    Construct via ``RunInputWire.from_run_input()`` which handles
+    schema resolution, tool normalization, and content serialization.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    _TOOL_KEY_MAP: ClassVar[dict[str, str]] = {
+        'allowed_tools': 'allowedTools',
+    }
+
+    instructions: str
+    tools: list[dict[str, Any]] = Field(default_factory=list)
+    content: list[dict[str, Any]] | None = None
+    answer_format: dict[str, Any] | None = Field(default=None, alias='answerFormat')
+    reasoning_format: dict[str, Any] | None = Field(default=None, alias='reasoningFormat')
+
+    @classmethod
+    def from_run_input(cls, input: RunInput | dict[str, Any]) -> 'RunInputWire':
+        """Build from a user-facing ``RunInput`` or raw dict.
+
+        Resolves Pydantic-class schemas, normalizes tool dataclasses to
+        dicts with camelCase keys, and serializes content blocks.
+        """
+        if isinstance(input, RunInput):
+            return cls(
+                instructions=input.instructions,
+                tools=[cls._normalize_tool(t) for t in input.tools],
+                content=(
+                    [cls._normalize_content_block(b) for b in input.content]
+                    if input.content
+                    else None
+                ),
+                answer_format=cls._resolve_schema(input.answer_format),
+                reasoning_format=cls._resolve_schema(input.reasoning_format),
+            )
+
+        raw = dict(input)
+        return cls(
+            instructions=raw['instructions'],
+            tools=[cls._normalize_tool(t) for t in raw.get('tools', [])],
+            content=(
+                [cls._normalize_content_block(b) for b in raw['content']]
+                if raw.get('content')
+                else None
+            ),
+            answer_format=cls._resolve_schema(raw.get('answerFormat')),
+            reasoning_format=cls._resolve_schema(raw.get('reasoningFormat')),
+        )
+
+    @staticmethod
+    def _resolve_schema(schema: Any) -> dict[str, Any] | None:
+        """Resolve a schema to a JSON Schema dict.
+
+        Accepts a Pydantic BaseModel class (calls ``model_json_schema()``),
+        a dict (passed through), or None.
+        """
+        if schema is None:
+            return None
+        if isinstance(schema, type) and hasattr(schema, 'model_json_schema'):
+            return schema.model_json_schema()
+        if isinstance(schema, dict):
+            return schema
+        return schema
+
+    @classmethod
+    def _normalize_tool(cls, tool: Any) -> dict[str, Any]:
+        """Convert a tool dataclass to an API-compatible dict.
+
+        Strips None values and maps snake_case keys to camelCase.
+        """
+        if not hasattr(tool, '__dict__'):
+            return tool
+
+        result = {}
+        for k, v in tool.__dict__.items():
+            if v is None:
+                continue
+            if hasattr(v, '__dict__'):
+                v = {
+                    cls._TOOL_KEY_MAP.get(nk, nk): nv
+                    for nk, nv in v.__dict__.items()
+                    if nv is not None
+                }
+            key = cls._TOOL_KEY_MAP.get(k, k)
+            result[key] = v
+        return result
+
+    @staticmethod
+    def _normalize_content_block(block: Any) -> Any:
+        """Convert a Pydantic ContentBlock (or dict) to a JSON-ready dict."""
+        if hasattr(block, 'model_dump'):
+            return block.model_dump(mode='json', exclude_none=True)
+        return block
+
+
+class CreateRunBody(BaseModel):
+    """Wire-format model for the full POST /v1/runs request body.
+
+    Validates the top-level shape (``engine`` + ``input``) and serializes
+    to the camelCase dict the API expects via ``to_dict()``.  Size
+    validation is built in — ``to_dict()`` raises ``RequestTooLargeError``
+    if the payload exceeds the API limit.
+    """
+
+    MAX_REQUEST_BYTES: ClassVar[int] = 5 * 1024 * 1024
+
+    engine: Engine
+    input: RunInputWire
+
+    @classmethod
+    def build(cls, engine: Engine, input: RunInput | dict[str, Any]) -> 'CreateRunBody':
+        """Construct from user-facing types, normalizing input in one step."""
+        return cls(engine=engine, input=RunInputWire.from_run_input(input))
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to the JSON-ready dict sent over the wire.
+
+        Raises ``RequestTooLargeError`` if the serialized body exceeds
+        the API size limit.
+        """
+        d = self.model_dump(by_alias=True, exclude_none=True)
+        serialized = json.dumps(d)
+        if len(serialized.encode('utf-8')) > self.MAX_REQUEST_BYTES:
+            raise RequestTooLargeError(
+                f'request body exceeds {self.MAX_REQUEST_BYTES} bytes — split images '
+                'across multiple turns or upload via /v1/internal/attachments first'
+            )
+        return d
 
 
 @dataclass

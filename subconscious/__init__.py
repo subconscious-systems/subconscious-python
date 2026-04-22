@@ -4,12 +4,13 @@ Subconscious Python SDK
 The official Python SDK for the Subconscious API.
 """
 
-from .client import RequestTooLargeError, Subconscious
+from .client import Subconscious
 from .content import Image
 from .errors import (
     AuthenticationError,
     NotFoundError,
     RateLimitError,
+    RequestTooLargeError,
     SubconsciousError,
     ValidationError,
 )
@@ -17,6 +18,8 @@ from .types import (
     AgentToolUse,
     # Multimodal content
     ContentBlock,
+    # Wire-format request models
+    CreateRunBody,
     DeltaEvent,
     DoneEvent,
     Engine,
@@ -39,6 +42,7 @@ from .types import (
     Run,
     RunError,
     RunInput,
+    RunInputWire,
     RunOptions,
     RunParams,
     RunResult,
@@ -62,6 +66,9 @@ __all__ = [
     # Client
     'Subconscious',
     'RequestTooLargeError',
+    # Wire-format request models
+    'RunInputWire',
+    'CreateRunBody',
     # Multimodal content
     'Image',
     'ContentBlock',

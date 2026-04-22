@@ -1,6 +1,6 @@
 """Tests for type definitions, tool serialization, and run parsing."""
 
-from subconscious.client import Subconscious, _normalize_tool
+from subconscious.client import Subconscious
 from subconscious.types import (
     AgentToolUse,
     FunctionTool,
@@ -10,6 +10,7 @@ from subconscious.types import (
     ReasoningTask,
     Run,
     RunError,
+    RunInputWire,
     RunResult,
     Tool,
     Usage,
@@ -80,17 +81,20 @@ class TestToolUnion:
 
 
 # ---------------------------------------------------------------------------
-# Serialization (_normalize_tool)
+# Tool serialization via RunInputWire
 # ---------------------------------------------------------------------------
 
 
-class TestNormalizeTool:
+def _wire_tools(tools):
+    """Helper: build a RunInputWire and return the serialized tools list."""
+    wire = RunInputWire.from_run_input({'instructions': 'x', 'tools': tools})
+    return wire.tools
+
+
+class TestToolSerialization:
     def test_mcp_key_mapping(self):
-        tool = MCPTool(
-            url='https://x.com/mcp',
-            allowed_tools=['search', 'fetch'],
-        )
-        result = _normalize_tool(tool)
+        tool = MCPTool(url='https://x.com/mcp', allowed_tools=['search', 'fetch'])
+        [result] = _wire_tools([tool])
         assert 'allowedTools' in result
         assert result['allowedTools'] == ['search', 'fetch']
         assert 'allowed_tools' not in result
@@ -100,7 +104,7 @@ class TestNormalizeTool:
     def test_mcp_with_auth_nested_serialization(self):
         auth = McpAuth(type='bearer', token='tok123')
         tool = MCPTool(url='https://x.com/mcp', auth=auth)
-        result = _normalize_tool(tool)
+        [result] = _wire_tools([tool])
         assert isinstance(result['auth'], dict)
         assert result['auth']['type'] == 'bearer'
         assert result['auth']['token'] == 'tok123'
@@ -108,24 +112,17 @@ class TestNormalizeTool:
 
     def test_strips_none_values(self):
         tool = MCPTool(url='https://x.com/mcp')
-        result = _normalize_tool(tool)
+        [result] = _wire_tools([tool])
         assert 'allowedTools' not in result
         assert 'auth' not in result
         assert set(result.keys()) == {'url', 'type'}
 
     def test_dict_passthrough(self):
         raw = {'type': 'custom', 'name': 'raw'}
-        result = _normalize_tool(raw)
+        [result] = _wire_tools([raw])
         assert result == raw
 
-
-# ---------------------------------------------------------------------------
-# Backward compatibility
-# ---------------------------------------------------------------------------
-
-
-class TestBackwardCompat:
-    def test_function_tool_unchanged(self):
+    def test_function_tool(self):
         tool = FunctionTool(
             name='my_tool',
             description='Does stuff',
@@ -135,19 +132,17 @@ class TestBackwardCompat:
             headers={'X-Key': 'val'},
             defaults={'org': 'acme'},
         )
-        assert tool.name == 'my_tool'
-        assert tool.type == 'function'
-        result = _normalize_tool(tool)
+        [result] = _wire_tools([tool])
         assert result['name'] == 'my_tool'
+        assert result['type'] == 'function'
         assert result['headers'] == {'X-Key': 'val'}
         assert result['defaults'] == {'org': 'acme'}
 
-    def test_platform_tool_unchanged(self):
+    def test_platform_tool(self):
         tool = PlatformTool(id='fast_search', options={'limit': 10})
-        assert tool.id == 'fast_search'
-        assert tool.type == 'platform'
-        result = _normalize_tool(tool)
+        [result] = _wire_tools([tool])
         assert result['id'] == 'fast_search'
+        assert result['type'] == 'platform'
         assert result['options'] == {'limit': 10}
 
 

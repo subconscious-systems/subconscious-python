@@ -11,6 +11,7 @@ import requests
 
 from .errors import raise_for_status
 from .types import (
+    CreateRunBody,
     DeltaEvent,
     DoneEvent,
     Engine,
@@ -22,14 +23,6 @@ from .types import (
     RunStatus,
     StreamEvent,
 )
-
-# Cap the JSON body size we'll send. Express has a 6 MB body parser limit, so we
-# keep the SDK comfortably under that to leave headroom for tools/instructions.
-MAX_REQUEST_BYTES = 5 * 1024 * 1024
-
-
-class RequestTooLargeError(ValueError):
-    """Raised when the serialized run request exceeds MAX_REQUEST_BYTES."""
 
 
 def _resolve_api_key(explicit: str | None) -> str:
@@ -60,106 +53,6 @@ def _resolve_api_key(explicit: str | None) -> str:
         '  • Set SUBCONSCIOUS_API_KEY environment variable\n'
         '  • Run `npx subconscious login` to authenticate'
     )
-
-
-def _resolve_schema(schema: Any) -> dict[str, Any] | None:
-    """
-    Resolve a schema to a JSON Schema dict.
-
-    Accepts:
-    - A Pydantic BaseModel class (calls model_json_schema() automatically)
-    - A dict (passed through as-is)
-    - None (returns None)
-    """
-    if schema is None:
-        return None
-
-    # Check if it's a Pydantic model class
-    if isinstance(schema, type) and hasattr(schema, 'model_json_schema'):
-        return schema.model_json_schema()
-
-    # Already a dict
-    if isinstance(schema, dict):
-        return schema
-
-    # Unknown type - try to use it as-is
-    return schema
-
-
-# Python snake_case → API camelCase key mapping for tool serialization
-_TOOL_KEY_MAP = {
-    'allowed_tools': 'allowedTools',
-}
-
-
-def _normalize_tool(tool: Any) -> dict[str, Any]:
-    """Convert a tool dataclass to an API-compatible dict.
-
-    Strips None values and maps snake_case keys to camelCase.
-    """
-    if not hasattr(tool, '__dict__'):
-        return tool
-
-    result = {}
-    for k, v in tool.__dict__.items():
-        if v is None:
-            continue
-        # Recursively normalize nested dataclasses (e.g. McpAuth)
-        if hasattr(v, '__dict__'):
-            v = {_TOOL_KEY_MAP.get(nk, nk): nv for nk, nv in v.__dict__.items() if nv is not None}
-        key = _TOOL_KEY_MAP.get(k, k)
-        result[key] = v
-    return result
-
-
-def _normalize_content_block(block: Any) -> Any:
-    """Convert a Pydantic ContentBlock (or dict) to a JSON-ready dict.
-
-    Accepts either a ``TextContent``/``ImageContent`` model (from
-    ``subconscious.types``) or a plain dict matching the same shape.
-    """
-    if hasattr(block, 'model_dump'):
-        return block.model_dump(mode='json', exclude_none=True)
-    return block
-
-
-def _build_input_dict(input: RunInput | dict[str, Any]) -> dict[str, Any]:
-    """Lower a RunInput/dict into the on-the-wire shape expected by the API."""
-    if isinstance(input, RunInput):
-        input_dict: dict[str, Any] = {
-            'instructions': input.instructions,
-            'tools': input.tools,
-        }
-        if input.answer_format is not None:
-            input_dict['answerFormat'] = _resolve_schema(input.answer_format)
-        if input.reasoning_format is not None:
-            input_dict['reasoningFormat'] = _resolve_schema(input.reasoning_format)
-        if input.content is not None:
-            input_dict['content'] = input.content
-    else:
-        input_dict = dict(input)  # copy so we don't mutate the caller's dict
-        if 'answerFormat' in input_dict:
-            input_dict['answerFormat'] = _resolve_schema(input_dict['answerFormat'])
-        if 'reasoningFormat' in input_dict:
-            input_dict['reasoningFormat'] = _resolve_schema(input_dict['reasoningFormat'])
-
-    input_dict['tools'] = [_normalize_tool(t) for t in input_dict.get('tools', [])]
-
-    # Normalize content blocks (Pydantic → dict).
-    if input_dict.get('content'):
-        input_dict['content'] = [_normalize_content_block(b) for b in input_dict['content']]
-
-    return input_dict
-
-
-def _check_request_size(payload: dict[str, Any]) -> None:
-    """Reject payloads that exceed the API size limit before the network roundtrip."""
-    serialized = json.dumps(payload)
-    if len(serialized.encode('utf-8')) > MAX_REQUEST_BYTES:
-        raise RequestTooLargeError(
-            f'request body exceeds {MAX_REQUEST_BYTES} bytes — split images '
-            'across multiple turns or upload via /v1/internal/attachments first'
-        )
 
 
 TERMINAL_STATUSES: list[RunStatus] = ['succeeded', 'failed', 'canceled', 'timed_out']
@@ -270,16 +163,8 @@ class Subconscious:
             )
             ```
         """
-        input_dict = _build_input_dict(input)
-        body = {'engine': engine, 'input': input_dict}
-        _check_request_size(body)
-
-        # Make request
-        data = self._request(
-            'POST',
-            '/runs',
-            body,
-        )
+        payload = CreateRunBody.build(engine, input).to_dict()
+        data = self._request('POST', '/runs', payload)
 
         run_id = data['runId']
 
@@ -417,10 +302,7 @@ class Subconscious:
             Rich streaming events (reasoning steps, tool calls) are coming soon.
             Currently provides text deltas only.
         """
-        input_dict = _build_input_dict(input)
-        body = {'engine': engine, 'input': input_dict}
-        _check_request_size(body)
-
+        payload = CreateRunBody.build(engine, input).to_dict()
         url = f'{self._base_url}/runs/stream'
         headers = {
             **self._headers(),
@@ -430,7 +312,7 @@ class Subconscious:
         response = requests.post(
             url,
             headers=headers,
-            json=body,
+            json=payload,
             stream=True,
         )
         raise_for_status(response)

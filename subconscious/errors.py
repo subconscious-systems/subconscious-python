@@ -14,6 +14,10 @@ ErrorCode = Literal[
 ]
 
 
+class RequestTooLargeError(ValueError):
+    """Raised when the serialized run request exceeds the API size limit."""
+
+
 class SubconsciousError(Exception):
     """Base exception for Subconscious API errors."""
 
