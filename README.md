@@ -1,6 +1,20 @@
-# Subconscious SDK
+<p align="center">
+  <img src="https://www.subconscious.dev/logo.svg" alt="Subconscious" width="64" height="64">
+</p>
 
-The official Python SDK for the [Subconscious API](https://subconscious.dev).
+<h1 align="center">Subconscious SDK</h1>
+
+<p align="center">
+  The official Python SDK for the <a href="https://subconscious.dev">Subconscious API</a>
+</p>
+
+<p align="center">
+  <a href="https://pypi.org/project/subconscious-sdk/"><img src="https://img.shields.io/pypi/v/subconscious-sdk.svg" alt="PyPI version"></a>
+  <a href="https://pypi.org/project/subconscious-sdk/"><img src="https://img.shields.io/pypi/dm/subconscious-sdk.svg" alt="PyPI downloads"></a>
+  <a href="https://docs.subconscious.dev"><img src="https://img.shields.io/badge/docs-subconscious.dev-blue" alt="docs"></a>
+  <img src="https://img.shields.io/badge/python-%3E%3D3.10-brightgreen" alt="python version">
+  <a href="https://github.com/subconscious-systems/subconscious-sdk"><img src="https://img.shields.io/pypi/l/subconscious-sdk.svg" alt="license"></a>
+</p>
 
 ---
 
