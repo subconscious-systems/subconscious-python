@@ -9,17 +9,13 @@ from pathlib import Path
 import pytest
 
 from subconscious import (
-    EngineDoesNotSupportImagesError,
     Image,
     ImageContent,
     RequestTooLargeError,
-    TextContent,
-    engine_supports_images,
 )
 from subconscious.client import (
     _build_input_dict,
-    _check_capabilities_and_size,
-    _content_has_images,
+    _check_request_size,
 )
 
 # 1x1 PNG (valid magic bytes).
@@ -70,23 +66,6 @@ def test_image_rejects_disallowed_mime():
         Image.from_bytes(b'whatever', mime='image/bmp')
 
 
-def test_content_has_images_handles_pydantic_and_dict():
-    text_block = TextContent(type='text', text='hi')
-    image_block = Image.from_bytes(PNG_BYTES)
-    assert _content_has_images([text_block]) is False
-    assert _content_has_images([text_block, image_block]) is True
-    assert _content_has_images([{'type': 'image', 'source': {}}]) is True
-    assert _content_has_images([]) is False
-    assert _content_has_images(None) is False
-
-
-def test_engine_supports_images_snapshot():
-    assert engine_supports_images('tim-claude') is True
-    assert engine_supports_images('tim-claude-heavy') is True
-    # Unknown engine — fail closed
-    assert engine_supports_images('unknown-engine') is False
-
-
 def test_build_input_dict_serializes_pydantic_content():
     img = Image.from_bytes(PNG_BYTES)
     payload = _build_input_dict({'instructions': 'look', 'content': [img]})
@@ -96,27 +75,8 @@ def test_build_input_dict_serializes_pydantic_content():
     json.dumps(payload)
 
 
-def test_check_capabilities_rejects_image_on_text_only_engine():
-    img = Image.from_bytes(PNG_BYTES)
-    payload = {
-        'engine': 'tim-oss-local',
-        'input': _build_input_dict({'instructions': 'x', 'content': [img]}),
-    }
-    with pytest.raises(EngineDoesNotSupportImagesError):
-        _check_capabilities_and_size('tim-oss-local', payload)
-
-
-def test_check_capabilities_passes_for_capable_engine():
-    img = Image.from_bytes(PNG_BYTES)
-    payload = {
-        'engine': 'tim-claude',
-        'input': _build_input_dict({'instructions': 'x', 'content': [img]}),
-    }
-    _check_capabilities_and_size('tim-claude', payload)  # no raise
-
-
-def test_check_capabilities_rejects_oversize_payload():
+def test_check_request_size_rejects_oversize_payload():
     huge = 'x' * (6 * 1024 * 1024)
     payload = {'engine': 'tim-claude', 'input': {'instructions': huge, 'tools': []}}
     with pytest.raises(RequestTooLargeError):
-        _check_capabilities_and_size('tim-claude', payload)
+        _check_request_size(payload)

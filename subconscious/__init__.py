@@ -4,11 +4,6 @@ Subconscious Python SDK
 The official Python SDK for the Subconscious API.
 """
 
-from ._capabilities import (
-    SUGGESTED_IMAGE_ENGINES,
-    EngineDoesNotSupportImagesError,
-    engine_supports_images,
-)
 from .client import RequestTooLargeError, Subconscious
 from .content import Image
 from .errors import (
@@ -79,10 +74,6 @@ __all__ = [
     'ImageMime',
     # Tool response
     'ToolResponse',
-    # Capability helpers
-    'engine_supports_images',
-    'SUGGESTED_IMAGE_ENGINES',
-    'EngineDoesNotSupportImagesError',
     # Run types
     'Run',
     'RunStatus',

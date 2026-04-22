@@ -9,11 +9,6 @@ from typing import Any
 
 import requests
 
-from ._capabilities import (
-    SUGGESTED_IMAGE_ENGINES,
-    EngineDoesNotSupportImagesError,
-    engine_supports_images,
-)
 from .errors import raise_for_status
 from .types import (
     DeltaEvent,
@@ -128,18 +123,6 @@ def _normalize_content_block(block: Any) -> Any:
     return block
 
 
-def _content_has_images(content: list[Any] | None) -> bool:
-    if not content:
-        return False
-    for block in content:
-        block_type = (
-            getattr(block, 'type', None) if not isinstance(block, dict) else block.get('type')
-        )
-        if block_type == 'image':
-            return True
-    return False
-
-
 def _build_input_dict(input: RunInput | dict[str, Any]) -> dict[str, Any]:
     """Lower a RunInput/dict into the on-the-wire shape expected by the API."""
     if isinstance(input, RunInput):
@@ -169,15 +152,8 @@ def _build_input_dict(input: RunInput | dict[str, Any]) -> dict[str, Any]:
     return input_dict
 
 
-def _check_capabilities_and_size(engine: Engine, payload: dict[str, Any]) -> None:
-    """Client-side guards mirroring server-side checks. Surfaces typed errors
-    before the network roundtrip when possible."""
-    content = payload.get('input', {}).get('content')
-    if _content_has_images(content) and not engine_supports_images(engine):
-        raise EngineDoesNotSupportImagesError(
-            f'Engine "{engine}" does not accept images. '
-            f'Use one of: {", ".join(SUGGESTED_IMAGE_ENGINES)}.'
-        )
+def _check_request_size(payload: dict[str, Any]) -> None:
+    """Reject payloads that exceed the API size limit before the network roundtrip."""
     serialized = json.dumps(payload)
     if len(serialized.encode('utf-8')) > MAX_REQUEST_BYTES:
         raise RequestTooLargeError(
@@ -296,7 +272,7 @@ class Subconscious:
         """
         input_dict = _build_input_dict(input)
         body = {'engine': engine, 'input': input_dict}
-        _check_capabilities_and_size(engine, body)
+        _check_request_size(body)
 
         # Make request
         data = self._request(
@@ -443,7 +419,7 @@ class Subconscious:
         """
         input_dict = _build_input_dict(input)
         body = {'engine': engine, 'input': input_dict}
-        _check_capabilities_and_size(engine, body)
+        _check_request_size(body)
 
         url = f'{self._base_url}/runs/stream'
         headers = {
