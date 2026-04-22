@@ -98,14 +98,20 @@ def test_build_input_dict_serializes_pydantic_content():
 
 def test_check_capabilities_rejects_image_on_text_only_engine():
     img = Image.from_bytes(PNG_BYTES)
-    payload = {'engine': 'tim-oss-local', 'input': _build_input_dict({'instructions': 'x', 'content': [img]})}
+    payload = {
+        'engine': 'tim-oss-local',
+        'input': _build_input_dict({'instructions': 'x', 'content': [img]}),
+    }
     with pytest.raises(EngineDoesNotSupportImagesError):
         _check_capabilities_and_size('tim-oss-local', payload)
 
 
 def test_check_capabilities_passes_for_capable_engine():
     img = Image.from_bytes(PNG_BYTES)
-    payload = {'engine': 'tim-claude', 'input': _build_input_dict({'instructions': 'x', 'content': [img]})}
+    payload = {
+        'engine': 'tim-claude',
+        'input': _build_input_dict({'instructions': 'x', 'content': [img]}),
+    }
     _check_capabilities_and_size('tim-claude', payload)  # no raise
 
 

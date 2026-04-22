@@ -88,9 +88,9 @@ def test_wire_shape_text_only():
 
 
 def test_wire_shape_image_base64_source():
-    dumped = ToolResponse.build(
-        'tc_1', Image.from_bytes(PNG_BYTES)
-    ).model_dump(mode='json', exclude_none=True)
+    dumped = ToolResponse.build('tc_1', Image.from_bytes(PNG_BYTES)).model_dump(
+        mode='json', exclude_none=True
+    )
     source = dumped['content'][0]['source']
     # Exactly the three keys the canonical ``ImageSourceBase64`` zod requires.
     assert set(source.keys()) == {'kind', 'data', 'mime'}
@@ -101,9 +101,10 @@ def test_wire_shape_image_base64_source():
 
 def test_wire_shape_image_url_source():
     from subconscious import Image as _Image
-    dumped = ToolResponse.build(
-        'tc_1', _Image.from_url('https://example.com/x.png')
-    ).model_dump(mode='json', exclude_none=True)
+
+    dumped = ToolResponse.build('tc_1', _Image.from_url('https://example.com/x.png')).model_dump(
+        mode='json', exclude_none=True
+    )
     source = dumped['content'][0]['source']
     assert source['kind'] == 'url'
     assert source['url'] == 'https://example.com/x.png'
@@ -111,11 +112,10 @@ def test_wire_shape_image_url_source():
 
 def test_wire_shape_image_blob_ref_source():
     from subconscious import Image as _Image
+
     dumped = ToolResponse.build(
         'tc_1',
-        _Image.from_blob_ref(
-            'org/00000000-0000-0000-0000-000000000000/run/r/x.png', 'image/png'
-        ),
+        _Image.from_blob_ref('org/00000000-0000-0000-0000-000000000000/run/r/x.png', 'image/png'),
     ).model_dump(mode='json', exclude_none=True)
     source = dumped['content'][0]['source']
     assert source['kind'] == 'blob_ref'

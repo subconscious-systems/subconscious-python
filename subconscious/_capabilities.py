@@ -8,9 +8,7 @@ Update this whenever the monorepo flips an engine's `supports.images` flag.
 
 from __future__ import annotations
 
-from typing import FrozenSet
-
-_IMAGE_CAPABLE_ENGINES: FrozenSet[str] = frozenset(
+_IMAGE_CAPABLE_ENGINES: frozenset[str] = frozenset(
     {
         'tim-claude',
         'tim-claude-heavy',

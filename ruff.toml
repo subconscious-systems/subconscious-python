@@ -1,0 +1,48 @@
+target-version = "py310"
+line-length = 100
+indent-width = 4
+required-version = ">=0.12.0"
+show-fixes = true
+
+include = [
+    "**.py"
+]
+exclude = [
+    "**/__pycache__",
+    "**/.coverage",
+    "**/.ipynb_checkpoints",
+    "**/.mypy_cache",
+    "**/.nox",
+    "**/.pytest_cache",
+    "**/.ruff_cache",
+    "**/.tox",
+    "**/.venv",
+    "**/build",
+    "**/dist",
+    "**/env",
+    "**/node_modules",
+    "**/site-packages",
+    "**/htmlcov",
+    ".git",
+]
+force-exclude = true
+
+[lint]
+select = ["ASYNC", "B", "E", "F", "I", "SIM", "UP", "W"]
+ignore = ["E501"]
+
+[lint.per-file-ignores]
+"__init__.py" = ["E402"]
+"**/tests/**" = ["E402", "S101"]
+"**/test_*.py" = ["S101"]
+
+[lint.isort]
+known-first-party = ["subconscious"]
+no-sections = false
+
+[format]
+quote-style = "single"
+indent-style = "space"
+line-ending = "auto"
+skip-magic-trailing-comma = false
+docstring-code-format = true

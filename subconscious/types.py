@@ -1,69 +1,73 @@
 """Type definitions for the Subconscious SDK."""
 
-from typing import Any, Dict, List, Literal, Optional, Union
 from dataclasses import dataclass, field
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 # Engine types — matches public, non-deprecated engines from the monorepo.
 Engine = Literal[
-    "tim",
-    "tim-edge",
-    "tim-claude",
-    "tim-claude-heavy",
-    "tim-oss-local",
-    "tim-1.5",
-    "tim-gpt-heavy-tc",
+    'tim',
+    'tim-edge',
+    'tim-claude',
+    'tim-claude-heavy',
+    'tim-oss-local',
+    'tim-1.5',
+    'tim-gpt-heavy-tc',
 ]
 
 
 # JSON Schema types for structured output
-class OutputSchema(Dict[str, Any]):
+class OutputSchema(dict[str, Any]):
     """
     JSON Schema for structured output format.
-    
+
     Expected structure:
     - $defs: Optional definitions for complex types
     - properties: Dict of property names to their JSON Schema definitions
     - required: List of required property names
     - title: Title for the schema
     - type: "object"
-    
+
     Use pydantic_to_schema() to convert a Pydantic model to this format.
     """
+
     pass
 
 
-def pydantic_to_schema(model: type, title: Optional[str] = None) -> OutputSchema:
+def pydantic_to_schema(model: type, title: str | None = None) -> OutputSchema:
     """
     Convert a Pydantic model to the JSON Schema format expected by Subconscious.
-    
+
     Note: You typically don't need to call this directly. The SDK automatically
     converts Pydantic models passed to answerFormat/reasoningFormat.
-    
+
     Args:
         model: A Pydantic BaseModel class
         title: Optional title override (defaults to model class name)
-    
+
     Returns:
         An OutputSchema compatible with answerFormat/reasoningFormat
     """
     schema = model.model_json_schema()
-    
-    result = OutputSchema({
-        "type": "object",
-        "title": title or schema.get("title", model.__name__),
-        "properties": schema.get("properties", {}),
-        "required": schema.get("required", list(schema.get("properties", {}).keys())),
-    })
-    
-    if "$defs" in schema:
-        result["$defs"] = schema["$defs"]
-    
+
+    result = OutputSchema(
+        {
+            'type': 'object',
+            'title': title or schema.get('title', model.__name__),
+            'properties': schema.get('properties', {}),
+            'required': schema.get('required', list(schema.get('properties', {}).keys())),
+        }
+    )
+
+    if '$defs' in schema:
+        result['$defs'] = schema['$defs']
+
     return result
 
+
 # Run status types
-RunStatus = Literal["queued", "running", "succeeded", "failed", "canceled", "timed_out"]
+RunStatus = Literal['queued', 'running', 'succeeded', 'failed', 'canceled', 'timed_out']
 
 
 # ---------------------------------------------------------------------------
@@ -72,17 +76,19 @@ RunStatus = Literal["queued", "running", "succeeded", "failed", "canceled", "tim
 # populate_by_name=True allows both snake_case and camelCase construction.
 # ---------------------------------------------------------------------------
 
+
 class AgentToolUse(BaseModel):
     """A tool call within a reasoning step.
 
     Maps to ``AgentToolUse`` in the monorepo (schemas/index.ts).
     """
+
     model_config = ConfigDict(populate_by_name=True)
 
     tool_name: str
-    tool_call_id: Optional[str] = None
-    parameters: Dict[str, Any] = Field(default_factory=dict)
-    tool_result: Optional[Any] = None
+    tool_call_id: str | None = None
+    parameters: dict[str, Any] = Field(default_factory=dict)
+    tool_result: Any | None = None
 
 
 class ReasoningTask(BaseModel):
@@ -92,13 +98,14 @@ class ReasoningTask(BaseModel):
     All fields are optional because the tree is built incrementally
     during streaming.
     """
+
     model_config = ConfigDict(populate_by_name=True)
 
-    title: Optional[str] = None
-    thought: Optional[str] = None
-    tooluse: Optional[AgentToolUse] = None
-    subtasks: Optional[List["ReasoningTask"]] = None
-    conclusion: Optional[str] = None
+    title: str | None = None
+    thought: str | None = None
+    tooluse: AgentToolUse | None = None
+    subtasks: list['ReasoningTask'] | None = None
+    conclusion: str | None = None
 
 
 class RunResult(BaseModel):
@@ -106,8 +113,9 @@ class RunResult(BaseModel):
 
     Maps to ``ReasoningOutput`` in the monorepo (schemas/index.ts).
     """
-    answer: str = ""
-    reasoning: Optional[List[ReasoningTask]] = None
+
+    answer: str = ''
+    reasoning: list[ReasoningTask] | None = None
 
 
 class Usage(BaseModel):
@@ -116,11 +124,12 @@ class Usage(BaseModel):
     Maps to ``RunUsage`` in the monorepo (schemas/index.ts).
     Flat structure matching the API wire format exactly.
     """
+
     model_config = ConfigDict(populate_by_name=True)
 
-    input_tokens: int = Field(default=0, alias="inputTokens")
-    output_tokens: int = Field(default=0, alias="outputTokens")
-    duration_ms: Optional[int] = Field(default=None, alias="durationMs")
+    input_tokens: int = Field(default=0, alias='inputTokens')
+    output_tokens: int = Field(default=0, alias='outputTokens')
+    duration_ms: int | None = Field(default=None, alias='durationMs')
 
 
 class RunError(BaseModel):
@@ -128,19 +137,21 @@ class RunError(BaseModel):
 
     Maps to ``RunError`` in the monorepo (schemas/index.ts).
     """
-    code: str = ""
-    message: str = ""
+
+    code: str = ''
+    message: str = ''
 
 
 class Run(BaseModel):
     """Represents an agent run — mirrors GET /v1/runs/:runId response."""
+
     model_config = ConfigDict(populate_by_name=True)
 
-    run_id: str = Field(default="", alias="runId")
-    status: Optional[RunStatus] = None
-    result: Optional[RunResult] = None
-    usage: Optional[Usage] = None
-    error: Optional[RunError] = None
+    run_id: str = Field(default='', alias='runId')
+    status: RunStatus | None = None
+    result: RunResult | None = None
+    usage: Usage | None = None
+    error: RunError | None = None
 
 
 # Tool types
@@ -149,14 +160,14 @@ class PlatformTool:
     """A platform-hosted tool."""
 
     id: str
-    type: Literal["platform"] = "platform"
-    options: Dict[str, Any] = field(default_factory=dict)
+    type: Literal['platform'] = 'platform'
+    options: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class FunctionTool:
     """A custom function tool.
-    
+
     Attributes:
         name: The tool name the model will use to call it
         description: Description of what the tool does
@@ -169,15 +180,15 @@ class FunctionTool:
     """
 
     name: str
-    type: Literal["function"] = "function"
-    description: Optional[str] = None
-    parameters: Dict[str, Any] = field(default_factory=dict)
-    url: Optional[str] = None
-    method: Optional[str] = None
-    timeout: Optional[int] = None
-    headers: Optional[Dict[str, str]] = None
+    type: Literal['function'] = 'function'
+    description: str | None = None
+    parameters: dict[str, Any] = field(default_factory=dict)
+    url: str | None = None
+    method: str | None = None
+    timeout: int | None = None
+    headers: dict[str, str] | None = None
     """HTTP headers sent when calling this tool's endpoint."""
-    defaults: Optional[Dict[str, Any]] = None
+    defaults: dict[str, Any] | None = None
     """Parameter values hidden from model and injected at call time."""
 
 
@@ -202,9 +213,9 @@ class McpAuth:
             in (e.g. ``"X-Api-Key"``).
     """
 
-    type: Literal["bearer", "api_key"]
+    type: Literal['bearer', 'api_key']
     token: str
-    header: Optional[str] = None
+    header: str | None = None
 
 
 @dataclass
@@ -219,71 +230,66 @@ class MCPTool:
     """
 
     url: str
-    type: Literal["mcp"] = "mcp"
-    allowed_tools: Optional[List[str]] = None
-    auth: Optional[McpAuth] = None
+    type: Literal['mcp'] = 'mcp'
+    allowed_tools: list[str] | None = None
+    auth: McpAuth | None = None
 
 
 # Tool union type
-Tool = Union[PlatformTool, FunctionTool, MCPTool, Dict[str, Any]]
+Tool = PlatformTool | FunctionTool | MCPTool | dict[str, Any]
 
 
 # Multimodal content — mirrors packages/common/schemas/index.ts (TextContent,
 # ImageContent, ImageSource*). Hand-written to replace the earlier
 # datamodel-codegen pipeline; the SDK only needs the input-side surface.
-ImageMime = Literal["image/png", "image/jpeg", "image/gif", "image/webp"]
+ImageMime = Literal['image/png', 'image/jpeg', 'image/gif', 'image/webp']
 
 
 class TextContent(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    type: Literal["text"]
+    model_config = ConfigDict(extra='forbid')
+    type: Literal['text']
     text: str
 
 
 class ImageSourceBase64(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    kind: Literal["base64"]
+    model_config = ConfigDict(extra='forbid')
+    kind: Literal['base64']
     data: str
     mime: ImageMime
 
 
 class ImageSourceBlobRef(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    kind: Literal["blob_ref"]
+    model_config = ConfigDict(extra='forbid')
+    kind: Literal['blob_ref']
     blob_key: str
     mime: ImageMime
-    width: Optional[int] = None
-    height: Optional[int] = None
-    size_bytes: Optional[int] = None
-    attachment_id: Optional[str] = None
+    width: int | None = None
+    height: int | None = None
+    size_bytes: int | None = None
+    attachment_id: str | None = None
 
 
 class ImageSourceUrl(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    kind: Literal["url"]
+    model_config = ConfigDict(extra='forbid')
+    kind: Literal['url']
     url: str
-    mime: Optional[ImageMime] = None
+    mime: ImageMime | None = None
 
 
-ImageSource = Union[ImageSourceBase64, ImageSourceBlobRef, ImageSourceUrl]
+ImageSource = ImageSourceBase64 | ImageSourceBlobRef | ImageSourceUrl
 
 
 class ImageContent(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    type: Literal["image"]
+    model_config = ConfigDict(extra='forbid')
+    type: Literal['image']
     source: ImageSource
 
 
-ContentBlock = Union[TextContent, ImageContent]
+ContentBlock = TextContent | ImageContent
 
 
 # Flexible input accepted by ToolResponse.build().
-ToolResponseContent = Union[
-    str,
-    TextContent,
-    ImageContent,
-    List[Union[str, TextContent, ImageContent]],
-]
+ToolResponseContent = str | TextContent | ImageContent | list[str | TextContent | ImageContent]
 
 
 class ToolResponse(BaseModel):
@@ -296,9 +302,9 @@ class ToolResponse(BaseModel):
     callers holding already-normalized blocks.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra='forbid')
     tool_call_id: str
-    content: List[ContentBlock]
+    content: list[ContentBlock]
     is_error: bool = False
 
     @classmethod
@@ -308,11 +314,12 @@ class ToolResponse(BaseModel):
         content: ToolResponseContent,
         *,
         is_error: bool = False,
-    ) -> "ToolResponse":
+    ) -> 'ToolResponse':
         """Build a tool response from text, an image, or a mixed list."""
-        def _wrap(item: Union[str, TextContent, ImageContent]) -> ContentBlock:
+
+        def _wrap(item: str | TextContent | ImageContent) -> ContentBlock:
             if isinstance(item, str):
-                return TextContent(type="text", text=item)
+                return TextContent(type='text', text=item)
             return item
 
         blocks = [_wrap(i) for i in content] if isinstance(content, list) else [_wrap(content)]
@@ -324,12 +331,12 @@ class RunInput:
     """Input configuration for a run."""
 
     instructions: str
-    tools: List[Tool] = field(default_factory=list)
-    answer_format: Optional[OutputSchema] = None
+    tools: list[Tool] = field(default_factory=list)
+    answer_format: OutputSchema | None = None
     """JSON Schema for the answer output format. Use pydantic_to_schema() to generate from Pydantic."""
-    reasoning_format: Optional[OutputSchema] = None
+    reasoning_format: OutputSchema | None = None
     """JSON Schema for the reasoning output format. Use pydantic_to_schema() to generate from Pydantic."""
-    content: Optional[List[ContentBlock]] = None
+    content: list[ContentBlock] | None = None
     """Canonical multimodal content blocks (TextContent or ImageContent). Use the
     ``Image`` helper to build ImageContent blocks from a path/bytes/URL/blob_key."""
 
@@ -347,7 +354,7 @@ class RunParams:
 
     engine: Engine
     input: RunInput
-    options: Optional[RunOptions] = None
+    options: RunOptions | None = None
 
 
 @dataclass
@@ -355,7 +362,7 @@ class PollOptions:
     """Options for polling a run."""
 
     interval_ms: int = 1000
-    max_attempts: Optional[int] = None
+    max_attempts: int | None = None
 
 
 # Stream event types
@@ -363,28 +370,27 @@ class PollOptions:
 class DeltaEvent:
     """Text delta event - emitted as text is generated."""
 
-    type: Literal["delta"] = "delta"
-    run_id: str = ""
-    content: str = ""
+    type: Literal['delta'] = 'delta'
+    run_id: str = ''
+    content: str = ''
 
 
 @dataclass
 class DoneEvent:
     """Stream completed successfully."""
 
-    type: Literal["done"] = "done"
-    run_id: str = ""
+    type: Literal['done'] = 'done'
+    run_id: str = ''
 
 
 @dataclass
 class ErrorEvent:
     """Stream encountered an error."""
 
-    type: Literal["error"] = "error"
-    run_id: str = ""
-    message: str = ""
-    code: Optional[str] = None
+    type: Literal['error'] = 'error'
+    run_id: str = ''
+    message: str = ''
+    code: str | None = None
 
 
-StreamEvent = Union[DeltaEvent, DoneEvent, ErrorEvent]
-
+StreamEvent = DeltaEvent | DoneEvent | ErrorEvent

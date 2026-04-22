@@ -1,16 +1,16 @@
 """Custom exceptions for the Subconscious SDK."""
 
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Literal
 
 ErrorCode = Literal[
-    "invalid_request",
-    "authentication_failed",
-    "permission_denied",
-    "not_found",
-    "rate_limited",
-    "internal_error",
-    "service_unavailable",
-    "timeout",
+    'invalid_request',
+    'authentication_failed',
+    'permission_denied',
+    'not_found',
+    'rate_limited',
+    'internal_error',
+    'service_unavailable',
+    'timeout',
 ]
 
 
@@ -22,7 +22,7 @@ class SubconsciousError(Exception):
         code: ErrorCode,
         message: str,
         status: int,
-        details: Optional[Dict[str, Any]] = None,
+        details: dict[str, Any] | None = None,
     ):
         super().__init__(message)
         self.code = code
@@ -30,49 +30,49 @@ class SubconsciousError(Exception):
         self.details = details
 
     def __str__(self) -> str:
-        return f"{self.code}: {self.args[0]}"
+        return f'{self.code}: {self.args[0]}'
 
 
 class AuthenticationError(SubconsciousError):
     """Raised when API key is invalid or missing."""
 
-    def __init__(self, message: str = "Invalid API key"):
-        super().__init__("authentication_failed", message, 401)
+    def __init__(self, message: str = 'Invalid API key'):
+        super().__init__('authentication_failed', message, 401)
 
 
 class RateLimitError(SubconsciousError):
     """Raised when rate limit is exceeded."""
 
-    def __init__(self, message: str = "Rate limit exceeded"):
-        super().__init__("rate_limited", message, 429)
+    def __init__(self, message: str = 'Rate limit exceeded'):
+        super().__init__('rate_limited', message, 429)
 
 
 class NotFoundError(SubconsciousError):
     """Raised when a resource is not found."""
 
-    def __init__(self, message: str = "Resource not found"):
-        super().__init__("not_found", message, 404)
+    def __init__(self, message: str = 'Resource not found'):
+        super().__init__('not_found', message, 404)
 
 
 class ValidationError(SubconsciousError):
     """Raised when request validation fails."""
 
-    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
-        super().__init__("invalid_request", message, 400, details)
+    def __init__(self, message: str, details: dict[str, Any] | None = None):
+        super().__init__('invalid_request', message, 400, details)
 
 
 def _status_to_code(status: int) -> ErrorCode:
     """Map HTTP status codes to error codes."""
-    mapping: Dict[int, ErrorCode] = {
-        400: "invalid_request",
-        401: "authentication_failed",
-        403: "permission_denied",
-        404: "not_found",
-        429: "rate_limited",
-        503: "service_unavailable",
-        504: "timeout",
+    mapping: dict[int, ErrorCode] = {
+        400: 'invalid_request',
+        401: 'authentication_failed',
+        403: 'permission_denied',
+        404: 'not_found',
+        429: 'rate_limited',
+        503: 'service_unavailable',
+        504: 'timeout',
     }
-    return mapping.get(status, "internal_error")
+    return mapping.get(status, 'internal_error')
 
 
 def raise_for_status(response) -> None:
@@ -96,43 +96,42 @@ def raise_for_status(response) -> None:
     except Exception:
         body = None
 
-    error_field = body.get("error") if isinstance(body, dict) else None
+    error_field = body.get('error') if isinstance(body, dict) else None
     if isinstance(error_field, dict):
-        code = error_field.get("code", _status_to_code(response.status_code))
-        message = error_field.get("message") or str(error_field)
-        details = error_field.get("details")
+        code = error_field.get('code', _status_to_code(response.status_code))
+        message = error_field.get('message') or str(error_field)
+        details = error_field.get('details')
     elif isinstance(error_field, str):
         code = _status_to_code(response.status_code)
         message = error_field
         details = None
     else:
         code = _status_to_code(response.status_code)
-        message = response.text or f"HTTP {response.status_code}"
+        message = response.text or f'HTTP {response.status_code}'
         details = None
 
     # Context suffix: "[GET /v1/runs/<id>]" and a request id when the
     # server surfaces one. Skipped quietly if the request object isn't
     # reachable (e.g., requests.Response without a bound PreparedRequest).
-    request = getattr(response, "request", None)
-    method = getattr(request, "method", None)
-    url = getattr(request, "url", None)
-    request_id = response.headers.get("x-request-id") if response.headers else None
+    request = getattr(response, 'request', None)
+    method = getattr(request, 'method', None)
+    url = getattr(request, 'url', None)
+    request_id = response.headers.get('x-request-id') if response.headers else None
     suffix_parts = []
     if method and url:
-        suffix_parts.append(f"{method} {url}")
+        suffix_parts.append(f'{method} {url}')
     if request_id:
-        suffix_parts.append(f"request_id={request_id}")
+        suffix_parts.append(f'request_id={request_id}')
     if suffix_parts:
-        message = f"{message} [{' '.join(suffix_parts)}]"
+        message = f'{message} [{" ".join(suffix_parts)}]'
 
-    if code == "authentication_failed":
+    if code == 'authentication_failed':
         raise AuthenticationError(message)
-    elif code == "rate_limited":
+    elif code == 'rate_limited':
         raise RateLimitError(message)
-    elif code == "not_found":
+    elif code == 'not_found':
         raise NotFoundError(message)
-    elif code == "invalid_request":
+    elif code == 'invalid_request':
         raise ValidationError(message, details)
     else:
         raise SubconsciousError(code, message, response.status_code, details)
-

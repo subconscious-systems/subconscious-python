@@ -19,7 +19,6 @@ from __future__ import annotations
 import base64
 import urllib.request
 from pathlib import Path
-from typing import Optional, Union
 
 from .types import (
     ImageContent,
@@ -42,9 +41,7 @@ def _detect_mime(data: bytes) -> str:
         return 'image/gif'
     if len(data) >= 12 and data[:4] == b'RIFF' and data[8:12] == b'WEBP':
         return 'image/webp'
-    raise ValueError(
-        'unsupported image type — only PNG, JPEG, GIF, and WebP are accepted'
-    )
+    raise ValueError('unsupported image type — only PNG, JPEG, GIF, and WebP are accepted')
 
 
 class Image:
@@ -52,7 +49,7 @@ class Image:
     the bytes you have in hand."""
 
     @staticmethod
-    def from_path(path: Union[str, Path]) -> ImageContent:
+    def from_path(path: str | Path) -> ImageContent:
         """Read an image file from disk and emit an ImageContent(base64) block."""
         data = Path(path).read_bytes()
         mime = _detect_mime(data)
@@ -66,7 +63,7 @@ class Image:
         )
 
     @staticmethod
-    def from_bytes(data: bytes, mime: Optional[str] = None) -> ImageContent:
+    def from_bytes(data: bytes, mime: str | None = None) -> ImageContent:
         """Wrap raw bytes as an ImageContent(base64) block. Mime is detected if not provided."""
         resolved_mime = mime or _detect_mime(data)
         if resolved_mime not in _MIME_ALLOWED:
