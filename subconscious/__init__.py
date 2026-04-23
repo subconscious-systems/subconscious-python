@@ -5,81 +5,122 @@ The official Python SDK for the Subconscious API.
 """
 
 from .client import Subconscious
-from .types import (
-    # Run types
-    Run,
-    RunStatus,
-    RunResult,
-    RunInput,
-    RunOptions,
-    RunParams,
-    ReasoningNode,
-    Engine,
-    Usage,
-    ModelUsage,
-    PlatformToolUsage,
-    PollOptions,
-    # Tool types
-    Tool,
-    PlatformTool,
-    FunctionTool,
-    MCPTool,
-    McpAuth,
-    # Stream events
-    StreamEvent,
-    DeltaEvent,
-    DoneEvent,
-    ErrorEvent,
-    # Structured output
-    OutputSchema,
-    pydantic_to_schema,
-)
+from .content import Image
 from .errors import (
-    SubconsciousError,
     AuthenticationError,
-    RateLimitError,
     NotFoundError,
+    RateLimitError,
+    RequestTooLargeError,
+    SubconsciousError,
     ValidationError,
 )
+from .types import (
+    AgentToolUse,
+    # Multimodal content
+    AudioContent,
+    ContentBlock,
+    # Wire-format request models
+    CreateRunBody,
+    DeltaEvent,
+    DoneEvent,
+    Engine,
+    ErrorEvent,
+    FileContent,
+    FunctionTool,
+    ImageContent,
+    McpAuth,
+    MCPTool,
+    # Structured output
+    OutputSchema,
+    PlatformTool,
+    PollOptions,
+    ReasoningTask,
+    # Run types
+    Run,
+    RunError,
+    RunInput,
+    RunInputWire,
+    RunOptions,
+    RunOptionsWire,
+    RunOutput,
+    RunOutputWire,
+    RunParams,
+    RunResult,
+    RunStatus,
+    # Source types (shared across all content blocks)
+    Source,
+    SourceBase64,
+    SourceBlobRef,
+    SourceUrl,
+    # Stream events
+    StreamEvent,
+    TextContent,
+    # Tool types
+    Tool,
+    # Tool response
+    ToolResponse,
+    Usage,
+    pydantic_to_schema,
+)
 
-__version__ = "0.3.0"
-__author__ = "Subconscious Systems"
-__email__ = "contact@subconscious.dev"
+__version__ = '1.0.0'
+__author__ = 'Subconscious Systems'
+__email__ = 'contact@subconscious.dev'
 
 __all__ = [
     # Client
-    "Subconscious",
+    'Subconscious',
+    'RequestTooLargeError',
+    # Wire-format request models
+    'RunInputWire',
+    'RunOptionsWire',
+    'RunOutputWire',
+    'CreateRunBody',
+    # Multimodal content
+    'Image',
+    'ContentBlock',
+    'TextContent',
+    'ImageContent',
+    'AudioContent',
+    'FileContent',
+    'Source',
+    'SourceBase64',
+    'SourceBlobRef',
+    'SourceUrl',
+    # Tool response
+    'ToolResponse',
     # Run types
-    "Run",
-    "RunStatus",
-    "RunResult",
-    "RunInput",
-    "RunOptions",
-    "RunParams",
-    "ReasoningNode",
-    "Engine",
-    "Usage",
-    "ModelUsage",
-    "PlatformToolUsage",
-    "PollOptions",
+    'Run',
+    'RunStatus',
+    'RunResult',
+    'RunInput',
+    'RunOptions',
+    'RunOutput',
+    'RunParams',
+    'RunError',
+    'ReasoningTask',
+    'AgentToolUse',
+    'Engine',
+    'Usage',
+    'PollOptions',
     # Tool types
-    "Tool",
-    "PlatformTool",
-    "FunctionTool",
-    "MCPTool",
-    "McpAuth",
+    'Tool',
+    'PlatformTool',
+    'FunctionTool',
+    'MCPTool',
+    'McpAuth',
     # Stream events
-    "StreamEvent",
-    "DeltaEvent",
-    "DoneEvent",
-    "ErrorEvent",
+    'StreamEvent',
+    'DeltaEvent',
+    'DoneEvent',
+    'ErrorEvent',
     # Structured output
-    "OutputSchema",
-    "pydantic_to_schema",
+    'OutputSchema',
+    'pydantic_to_schema',
     # Errors
-    "SubconsciousError",
-    "AuthenticationError",
-    "RateLimitError",
-    "NotFoundError",
-    "ValidationError",
+    'SubconsciousError',
+    'AuthenticationError',
+    'RateLimitError',
+    'NotFoundError',
+    'ValidationError',
 ]
