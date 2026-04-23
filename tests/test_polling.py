@@ -160,3 +160,80 @@ class TestRunAwaitCompletionEndToEnd:
         assert run.run_id == 'r-nowait'
         assert len(call_log) == 1
         assert call_log[0] == {'method': 'POST', 'path': '/runs'}
+
+
+class TestParsedAnswerIntegration:
+    """The SDK attaches a best-effort ``parsed_answer`` on every response
+    path that flows through ``_parse_run`` (``get``, ``wait``, ``cancel``,
+    and transitively ``run(..., await_completion=True)``)."""
+
+    def test_get_populates_parsed_answer_when_answer_is_json(self):
+        client = Subconscious(api_key='test-key')
+        fake, _ = _request_sequence(
+            [
+                {
+                    'runId': 'r-json',
+                    'status': 'succeeded',
+                    'result': {'answer': '{"name":"ada","age":36}'},
+                }
+            ]
+        )
+        with patch.object(client, '_request', side_effect=fake):
+            run = client.get('r-json')
+
+        assert run.result.answer == '{"name":"ada","age":36}'
+        assert run.result.parsed_answer == {'name': 'ada', 'age': 36}
+
+    def test_get_leaves_parsed_answer_none_when_answer_is_plain_text(self):
+        client = Subconscious(api_key='test-key')
+        fake, _ = _request_sequence(
+            [{'runId': 'r-txt', 'status': 'succeeded', 'result': {'answer': 'free text'}}]
+        )
+        with patch.object(client, '_request', side_effect=fake):
+            run = client.get('r-txt')
+
+        assert run.result.answer == 'free text'
+        assert run.result.parsed_answer is None
+
+    def test_cancel_populates_parsed_answer(self):
+        client = Subconscious(api_key='test-key')
+        fake, _ = _request_sequence(
+            [
+                {
+                    'runId': 'r-c',
+                    'status': 'canceled',
+                    'result': {'answer': '{"partial":true}'},
+                }
+            ]
+        )
+        with patch.object(client, '_request', side_effect=fake):
+            run = client.cancel('r-c')
+
+        assert run.status == 'canceled'
+        assert run.result.parsed_answer == {'partial': True}
+
+    def test_run_with_await_completion_populates_parsed_answer(self):
+        client = Subconscious(api_key='test-key')
+        call_log = []
+
+        def fake(method, path, payload=None):
+            call_log.append({'method': method, 'path': path})
+            if method == 'POST':
+                return {'runId': 'r-ac'}
+            return {
+                'runId': 'r-ac',
+                'status': 'succeeded',
+                'result': {'answer': '[1,2,3]'},
+            }
+
+        with (
+            patch.object(client, '_request', side_effect=fake),
+            patch('subconscious.client.time.sleep'),
+        ):
+            run = client.run(
+                'tim',
+                {'instructions': 'hi'},
+                RunOptions(await_completion=True),
+            )
+
+        assert run.result.parsed_answer == [1, 2, 3]

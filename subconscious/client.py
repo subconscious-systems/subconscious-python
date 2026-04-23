@@ -1,5 +1,6 @@
 """Subconscious API client."""
 
+import contextlib
 import json
 import os
 import time
@@ -377,10 +378,8 @@ class Subconscious:
         return Run(run_id=run_id, status='succeeded') if run_id else None
 
     def _parse_run(self, data: dict[str, Any]) -> Run:
-        """Parse a run response from the API.
-
-        Uses Pydantic ``model_validate`` so the camelCase wire format
-        (``runId``, ``inputTokens``, etc.) is handled automatically via
-        field aliases.
-        """
-        return Run.model_validate(data)
+        run = Run.model_validate(data)
+        if run.result is not None and run.result.answer:
+            with contextlib.suppress(json.JSONDecodeError, ValueError):
+                run.result.parsed_answer = json.loads(run.result.answer)
+        return run

@@ -43,14 +43,14 @@ def pydantic_to_schema(model: type, title: str | None = None) -> OutputSchema:
     Convert a Pydantic model to the JSON Schema format expected by Subconscious.
 
     Note: You typically don't need to call this directly. The SDK automatically
-    converts Pydantic models passed to answerFormat/reasoningFormat.
+    converts Pydantic models passed to answerFormat.
 
     Args:
         model: A Pydantic BaseModel class
         title: Optional title override (defaults to model class name)
 
     Returns:
-        An OutputSchema compatible with answerFormat/reasoningFormat
+        An OutputSchema compatible with answerFormat
     """
     schema = model.model_json_schema()
 
@@ -119,6 +119,10 @@ class RunResult(BaseModel):
 
     answer: str = ''
     reasoning: list[ReasoningTask] | None = None
+    parsed_answer: Any = None
+    """Best-effort ``json.loads`` of ``answer``, populated by the SDK after
+    receiving the response. Never sent on the wire. ``None`` when ``answer``
+    is empty or not valid JSON."""
 
 
 class Usage(BaseModel):
@@ -350,8 +354,6 @@ class RunInput:
     skills are global; org skills are org-scoped). Unknown names fail the request."""
     answer_format: OutputSchema | None = None
     """JSON Schema for the answer output format. Use pydantic_to_schema() to generate from Pydantic."""
-    reasoning_format: OutputSchema | None = None
-    """JSON Schema for the reasoning output format. Use pydantic_to_schema() to generate from Pydantic."""
     content: list[ContentBlock] | None = None
     """Canonical multimodal content blocks (TextContent or ImageContent). Use the
     ``Image`` helper to build ImageContent blocks from a path/bytes/URL/blob_key."""
@@ -395,7 +397,6 @@ class RunInputWire(BaseModel):
         ),
     )
     answer_format: dict[str, Any] | None = Field(default=None, alias='answerFormat')
-    reasoning_format: dict[str, Any] | None = Field(default=None, alias='reasoningFormat')
 
     @classmethod
     def from_run_input(cls, input: RunInput | dict[str, Any]) -> 'RunInputWire':
@@ -416,7 +417,6 @@ class RunInputWire(BaseModel):
                     else None
                 ),
                 answer_format=cls._resolve_schema(input.answer_format),
-                reasoning_format=cls._resolve_schema(input.reasoning_format),
             )
 
         raw = dict(input)
@@ -431,7 +431,6 @@ class RunInputWire(BaseModel):
             resources=raw.get('resources') or None,
             skills=raw.get('skills') or None,
             answer_format=cls._resolve_schema(raw.get('answerFormat')),
-            reasoning_format=cls._resolve_schema(raw.get('reasoningFormat')),
         )
 
     @staticmethod

@@ -134,3 +134,58 @@ Engine = Literal[
 | `.subtask` (on ReasoningTask) | `.subtasks` |
 | `ReasoningNode` (in type hints/code) | `ReasoningTask` |
 | `run.result.reasoning.title` | `run.result.reasoning[0].title` (now a list) |
+| `RunInput(..., reasoning_format=...)` | Remove — field no longer exists |
+| `{'reasoningFormat': ...}` | Remove — field no longer exists |
+
+## `reasoning_format` removed
+
+The `reasoning_format` input field (aliased as `reasoningFormat` on the wire) is gone. If you were shaping the reasoning trace with a JSON/Pydantic schema, fold that guidance into your `instructions` or into `answer_format` instead — the agent's final output is the contract, and the reasoning trace is best treated as a read-only byproduct.
+
+```python
+# Before
+client.run(
+    engine='tim',
+    input={
+        'instructions': '...',
+        'answerFormat': AnswerSchema,
+        'reasoningFormat': ReasoningSchema,
+    },
+)
+
+# After
+client.run(
+    engine='tim',
+    input={
+        'instructions': '...',
+        'answerFormat': AnswerSchema,
+    },
+)
+```
+
+Requests that still include `reasoningFormat` are rejected by the API.
+
+## `RunResult.parsed_answer`
+
+`result.answer` is always a `str` on the wire, even when `answerFormat` is supplied — the API JSON-encodes the structured value. The SDK now attaches a `parsed_answer` companion field on every response that runs through the client (`run`, `get`, `wait`, `cancel`), populated via a best-effort `json.loads` of `answer`.
+
+```python
+from pydantic import BaseModel
+
+class Person(BaseModel):
+    name: str
+    age: int
+
+run = client.run(
+    engine='tim',
+    input={
+        'instructions': 'return JSON for a person',
+        'answerFormat': Person,
+    },
+    options={'await_completion': True},
+)
+
+run.result.answer         # '{"name":"ada","age":36}'  (raw string)
+run.result.parsed_answer  # {'name': 'ada', 'age': 36}  (decoded dict)
+```
+
+`parsed_answer` is typed as `Any` — validate with your Pydantic model of choice (`Person.model_validate(run.result.parsed_answer)`) if you want a typed instance. It is `None` when `answer` is empty or not valid JSON.

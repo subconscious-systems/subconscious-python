@@ -183,8 +183,6 @@ print(run.result.answer)  # JSON string matching AnalysisResult
 
 The SDK automatically converts your Pydantic model to JSON Schema. You can also pass a raw JSON Schema dict if preferred.
 
-For advanced use cases, you can also specify a `reasoningFormat` to structure the agent's reasoning output.
-
 ### Multimodal Input (Images)
 
 Send images alongside text instructions using the `Image` helper:

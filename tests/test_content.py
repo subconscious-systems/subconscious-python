@@ -123,12 +123,10 @@ class TestRunInputWire:
             {
                 'instructions': 'test',
                 'answerFormat': Schema,
-                'reasoningFormat': Schema,
             }
         )
         dumped = wire.model_dump(by_alias=True, exclude_none=True)
         assert 'answerFormat' in dumped
-        assert 'reasoningFormat' in dumped
         assert 'answer_format' not in dumped
 
     def test_none_fields_excluded(self):
