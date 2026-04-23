@@ -8,16 +8,7 @@ from pydantic import BaseModel, ConfigDict, Discriminator, Field
 
 from .errors import RequestTooLargeError
 
-# Engine types — matches public, non-deprecated engines from the monorepo.
-Engine = Literal[
-    'tim',
-    'tim-edge',
-    'tim-claude',
-    'tim-claude-heavy',
-    'tim-oss-local',
-    'tim-1.5',
-    'tim-gpt-heavy-tc',
-]
+Engine = str
 
 
 # JSON Schema types for structured output
