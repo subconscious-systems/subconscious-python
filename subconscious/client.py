@@ -163,7 +163,7 @@ class Subconscious:
             )
             ```
         """
-        payload = CreateRunBody.build(engine, input).to_dict()
+        payload = CreateRunBody.build(engine, input, options).to_dict()
         data = self._request('POST', '/runs', payload)
 
         run_id = data['runId']

@@ -41,6 +41,9 @@ from .types import (
     RunInput,
     RunInputWire,
     RunOptions,
+    RunOptionsWire,
+    RunOutput,
+    RunOutputWire,
     RunParams,
     RunResult,
     RunStatus,
@@ -70,6 +73,8 @@ __all__ = [
     'RequestTooLargeError',
     # Wire-format request models
     'RunInputWire',
+    'RunOptionsWire',
+    'RunOutputWire',
     'CreateRunBody',
     # Multimodal content
     'Image',
@@ -90,6 +95,7 @@ __all__ = [
     'RunResult',
     'RunInput',
     'RunOptions',
+    'RunOutput',
     'RunParams',
     'RunError',
     'ReasoningTask',
