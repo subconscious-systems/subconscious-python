@@ -185,7 +185,7 @@ canonical `code` from this set:
 ```
 invalid_request  authentication_failed  permission_denied
 not_found        rate_limited           internal_error
-service_unavailable  timeout            cancelled
+service_unavailable  timeout            canceled
 ```
 
 Pattern-match on `code`, never on `message`.
@@ -200,6 +200,46 @@ The SDK accepts any engine name as a string. Canonical live names:
 
 Legacy names (`tim-large`, `tim-gpt`, `tim-small`, `timini`, …) are still
 accepted and resolved to a live engine server-side.
+
+## Back-compat & deprecations
+
+The SDK keeps a thin compatibility shim for callers from before the
+`run` / `run_and_wait` split and the wire-format normalization. Existing
+code keeps working without changes; new code should reach for the new
+spellings.
+
+### `options.await_completion` — deprecated
+
+The single-method `client.run(..., options={"await_completion": True})`
+shape from older releases is still accepted. It transparently routes
+through `client.run_and_wait()` and emits a one-shot
+`DeprecationWarning` so the migration is visible in dev. Migrate by
+calling `run_and_wait()` directly:
+
+```python
+# Before (still works, emits DeprecationWarning once):
+run = client.run(
+    engine="tim-claude",
+    input={"instructions": "..."},
+    options={"await_completion": True},
+)
+
+# After:
+run = client.run_and_wait(engine="tim-claude", input={"instructions": "..."})
+```
+
+`RunOptions` will be removed in a future minor release.
+
+### Wire-format `runId`
+
+The canonical SSE event payload key is `runId` (camelCase, matching REST
+responses). The SDK still accepts the legacy snake_case `run_id` payload
+shape so callers running against older API builds keep working.
+
+### Error code spelling: `canceled` (one `l`)
+
+`ErrorCode` and `RunStatus` both use `canceled` (one `l`). The earlier
+double-`l` `cancelled` form was removed.
 
 ## License
 

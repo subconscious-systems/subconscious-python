@@ -41,8 +41,9 @@ def _frames_to_lines(frames: List[str]) -> List[str]:
 
 
 def test_stream_emits_started_first_R8():
+    """Canonical wire shape uses camelCase ``runId`` (matches REST responses)."""
     frames = [
-        "event: meta\ndata: {\"run_id\":\"run_abc\"}\n\n",
+        "event: meta\ndata: {\"runId\":\"run_abc\"}\n\n",
         "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n",
         "event: result\ndata: {\"result\":{\"answer\":\"hi\",\"reasoning\":null}}\n\n",
         "data: [DONE]\n\n",
@@ -59,6 +60,41 @@ def test_stream_emits_started_first_R8():
     types = [type(e) for e in events]
     assert DeltaEvent in types
     assert ResultEvent in types
+
+
+def test_stream_back_compat_legacy_run_id_snake_case():
+    """Older API builds emitted snake_case ``run_id``. SDKs MUST keep
+    accepting the legacy shape for at least one minor release."""
+    frames = [
+        "event: started\ndata: {\"run_id\":\"r_legacy\"}\n\n",
+        "event: result\ndata: {\"result\":{\"answer\":\"ok\",\"reasoning\":null}}\n\n",
+        "data: [DONE]\n\n",
+    ]
+    fake = _FakeResponse(_frames_to_lines(frames), headers={"x-run-id": "r_legacy"})
+    with patch("subconscious.client.requests.post", return_value=fake):
+        client = Subconscious(api_key="k")
+        events = list(client.stream(engine="tim-claude", input={"instructions": "hi"}))
+
+    assert isinstance(events[0], StartedEvent)
+    assert events[0].run_id == "r_legacy"
+
+
+def test_stream_parses_canceled_error_code_one_l():
+    """Canonical spelling is ``canceled`` (one ``l``) — matches RunStatus."""
+    frames = [
+        "event: started\ndata: {\"runId\":\"r1\"}\n\n",
+        "event: error\ndata: {\"code\":\"canceled\","
+        "\"message\":\"The run was canceled\"}\n\n",
+        "data: [DONE]\n\n",
+    ]
+    fake = _FakeResponse(_frames_to_lines(frames), headers={"x-run-id": "r1"})
+    with patch("subconscious.client.requests.post", return_value=fake):
+        client = Subconscious(api_key="k")
+        events = list(client.stream(engine="tim-claude", input={"instructions": "hi"}))
+
+    errors = [e for e in events if isinstance(e, ErrorEvent)]
+    assert len(errors) == 1
+    assert errors[0].code == "canceled"
 
 
 def test_stream_parses_result_with_usage_R15():

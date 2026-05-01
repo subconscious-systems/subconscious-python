@@ -268,11 +268,37 @@ class RunInput:
 
 
 @dataclass
+class RunOptions:
+    """**Deprecated.** Pre-split ``client.run()`` accepted
+    ``options.await_completion`` to choose between fire-and-forget and
+    polling-until-complete. The same thing is now expressed by calling
+    :py:meth:`Subconscious.run` (fire-and-forget) or
+    :py:meth:`Subconscious.run_and_wait` (polls until terminal).
+
+    Existing call sites continue to work — passing
+    ``options=RunOptions(await_completion=True)`` (or the dict form
+    ``options={"await_completion": True}``) to ``client.run()``
+    transparently routes through ``run_and_wait()`` and emits a one-shot
+    :py:class:`DeprecationWarning`.
+
+    .. deprecated::
+        Use :py:meth:`Subconscious.run_and_wait` instead. This shape will
+        be removed in a future minor release.
+    """
+
+    await_completion: Optional[bool] = None
+
+
+@dataclass
 class RunParams:
     """Parameters for creating a run."""
 
     engine: Engine
     input: RunInput
+    options: Optional[RunOptions] = None
+    """**Deprecated.** Use :py:meth:`Subconscious.run_and_wait` instead of
+    ``options.await_completion``. Kept for back-compat with pre-split callers.
+    """
 
 
 @dataclass

@@ -1,7 +1,8 @@
-"""Subconscious API client (1.0)."""
+"""Subconscious API client."""
 
 import json
 import time
+import warnings
 from dataclasses import asdict, is_dataclass
 from typing import Any, Dict, Generator, List, Optional, Union
 
@@ -20,6 +21,7 @@ from .types import (
     ResultEvent,
     Run,
     RunInput,
+    RunOptions,
     RunResult,
     RunStatus,
     StartedEvent,
@@ -28,6 +30,35 @@ from .types import (
     ToolUse,
     Usage,
 )
+
+
+_AWAIT_COMPLETION_WARNING_SHOWN = False
+
+
+def _warn_await_completion_deprecated() -> None:
+    global _AWAIT_COMPLETION_WARNING_SHOWN
+    if _AWAIT_COMPLETION_WARNING_SHOWN:
+        return
+    _AWAIT_COMPLETION_WARNING_SHOWN = True
+    warnings.warn(
+        "options.await_completion is deprecated. "
+        "Call client.run_and_wait(...) instead of "
+        "client.run(..., options={'await_completion': True}). "
+        "The legacy field will be removed in a future minor release.",
+        DeprecationWarning,
+        stacklevel=3,
+    )
+
+
+def _await_completion_requested(options: Any) -> bool:
+    """Read ``options.await_completion`` from a dict or RunOptions."""
+    if options is None:
+        return False
+    if isinstance(options, RunOptions):
+        return bool(options.await_completion)
+    if isinstance(options, dict):
+        return bool(options.get("await_completion"))
+    return False
 
 
 def _resolve_schema(schema: Any) -> Optional[Dict[str, Any]]:
@@ -200,15 +231,25 @@ class Subconscious:
         self,
         engine: Engine,
         input: Union[RunInput, Dict[str, Any]],
+        *,
+        options: Optional[Union[RunOptions, Dict[str, Any]]] = None,
+        poll_options: Optional[Union[PollOptions, Dict[str, Any]]] = None,
     ) -> Run:
         """Create a run and return its ``run_id`` immediately. Fire-and-forget.
 
         Use :py:meth:`run_and_wait` if you want to block until the run reaches
         a terminal state. (R18.)
+
+        Back-compat: passing ``options={"await_completion": True}`` (or the
+        ``RunOptions(await_completion=True)`` dataclass) transparently routes
+        through :py:meth:`run_and_wait` and emits a one-shot
+        :py:class:`DeprecationWarning`. New code should call
+        :py:meth:`run_and_wait` directly.
         """
-        body = self._build_create_body(engine, input)
-        data = self._request("POST", "/runs", body)
-        return Run(run_id=data["runId"])
+        if _await_completion_requested(options):
+            _warn_await_completion_deprecated()
+            return self.run_and_wait(engine, input, poll_options=poll_options)
+        return self._create_run_only(engine, input)
 
     def run_and_wait(
         self,
@@ -218,8 +259,21 @@ class Subconscious:
         poll_options: Optional[Union[PollOptions, Dict[str, Any]]] = None,
     ) -> Run:
         """Create a run and poll until it reaches a terminal state. (R18.)"""
-        run = self.run(engine, input)
+        # Use ``_create_run_only`` (the bare POST) instead of ``run()`` to
+        # avoid ping-ponging on the deprecated ``options.await_completion``
+        # back-compat path.
+        run = self._create_run_only(engine, input)
         return self.wait(run.run_id, poll_options)
+
+    def _create_run_only(
+        self,
+        engine: Engine,
+        input: Union[RunInput, Dict[str, Any]],
+    ) -> Run:
+        """Internal: bare POST /runs and return the run_id only."""
+        body = self._build_create_body(engine, input)
+        data = self._request("POST", "/runs", body)
+        return Run(run_id=data["runId"])
 
     def get(self, run_id: str) -> Run:
         """Get the current state of a run."""
@@ -416,7 +470,10 @@ class Subconscious:
         run_id: str,
     ) -> Optional[StreamEvent]:
         if event_tag in ("started", "meta"):
-            new_id = payload.get("run_id") or payload.get("runId") or run_id
+            # Canonical wire key is ``runId`` (camelCase). The legacy
+            # ``run_id`` snake_case form is accepted for one minor
+            # release of back-compat with older API builds.
+            new_id = payload.get("runId") or payload.get("run_id") or run_id
             if not new_id:
                 return None
             return StartedEvent(run_id=new_id)
@@ -469,7 +526,9 @@ class Subconscious:
             if content:
                 return DeltaEvent(run_id=run_id, content=content)
 
-        # Bare `{"run_id": "…"}` frames (legacy meta) — synthesize started.
+        # Bare `{"runId": "…"}` (or legacy `{"run_id": …}`) frames — synthesize started.
+        if "runId" in payload:
+            return StartedEvent(run_id=payload["runId"])
         if "run_id" in payload:
             return StartedEvent(run_id=payload["run_id"])
 

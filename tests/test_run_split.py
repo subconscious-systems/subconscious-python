@@ -1,10 +1,11 @@
 """Tests for the run / run_and_wait split (R18) and client overlay options (R9, R13)."""
 
 import json
+import warnings
 from unittest.mock import patch
 
 from subconscious import Subconscious, tools
-from subconscious.types import RunInput
+from subconscious.types import RunInput, RunOptions
 
 try:
     from pydantic import BaseModel  # type: ignore[import-not-found]
@@ -75,6 +76,96 @@ def test_run_and_wait_polls_until_terminal_R18():
     assert run.result is not None
     assert run.result.answer == "done"
     assert poll_count["n"] >= 2
+
+
+def test_run_options_await_completion_routes_through_run_and_wait():
+    """Back-compat: passing options.await_completion=True transparently
+    routes through run_and_wait and emits a one-shot DeprecationWarning."""
+    poll_count = {"n": 0}
+
+    def fake_request(method, url, headers=None, json=None):
+        if method == "POST":
+            return _FakeJSONResponse({"runId": "run_legacy"})
+        poll_count["n"] += 1
+        return _FakeJSONResponse(
+            {
+                "runId": "run_legacy",
+                "status": "succeeded",
+                "result": {"answer": "ok", "reasoning": None},
+            }
+        )
+
+    # Reset the one-shot guard so the test sees the warning.
+    import subconscious.client as _client_mod
+
+    _client_mod._AWAIT_COMPLETION_WARNING_SHOWN = False
+
+    with patch("subconscious.client.requests.request", side_effect=fake_request):
+        client = Subconscious(api_key="k")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            run = client.run(
+                engine="tim-claude",
+                input={"instructions": "hi"},
+                options={"await_completion": True},
+                poll_options={"interval_ms": 1},
+            )
+
+    assert run.status == "succeeded"
+    assert run.result is not None
+    assert run.result.answer == "ok"
+    assert poll_count["n"] >= 1
+    deprecation = [w for w in caught if issubclass(w.category, DeprecationWarning)]
+    assert any("await_completion" in str(w.message) for w in deprecation)
+
+
+def test_run_options_dataclass_form_also_works():
+    """The dataclass `RunOptions(await_completion=True)` form is equivalent
+    to the dict form for back-compat."""
+
+    def fake_request(method, url, headers=None, json=None):
+        if method == "POST":
+            return _FakeJSONResponse({"runId": "r"})
+        return _FakeJSONResponse(
+            {"runId": "r", "status": "succeeded", "result": {"answer": "", "reasoning": None}}
+        )
+
+    import subconscious.client as _client_mod
+
+    _client_mod._AWAIT_COMPLETION_WARNING_SHOWN = False
+
+    with patch("subconscious.client.requests.request", side_effect=fake_request):
+        client = Subconscious(api_key="k")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            run = client.run(
+                engine="tim-claude",
+                input={"instructions": "hi"},
+                options=RunOptions(await_completion=True),
+                poll_options={"interval_ms": 1},
+            )
+
+    assert run.status == "succeeded"
+
+
+def test_run_without_await_completion_still_fire_and_forgets():
+    """`run()` without options behaves the same as the new explicit
+    fire-and-forget mode."""
+    polled = {"hit": False}
+
+    def fake_request(method, url, headers=None, json=None):
+        if method == "POST":
+            return _FakeJSONResponse({"runId": "r"})
+        polled["hit"] = True
+        return _FakeJSONResponse({"runId": "r", "status": "succeeded"})
+
+    with patch("subconscious.client.requests.request", side_effect=fake_request):
+        client = Subconscious(api_key="k")
+        run = client.run(engine="tim-claude", input={"instructions": "hi"}, options={})
+
+    assert run.run_id == "r"
+    assert run.status is None
+    assert polled["hit"] is False
 
 
 def test_default_function_tool_headers_overlay_R9():
