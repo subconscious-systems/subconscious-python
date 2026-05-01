@@ -11,6 +11,7 @@ ErrorCode = Literal[
     "internal_error",
     "service_unavailable",
     "timeout",
+    "cancelled",
 ]
 
 

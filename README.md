@@ -2,18 +2,10 @@
   <img src="https://www.subconscious.dev/logo.svg" alt="Subconscious" width="64" height="64">
 </p>
 
-<h1 align="center">Subconscious SDK</h1>
+<h1 align="center">Subconscious Python SDK</h1>
 
 <p align="center">
   The official Python SDK for the <a href="https://subconscious.dev">Subconscious API</a>
-</p>
-
-<p align="center">
-  <a href="https://pypi.org/project/subconscious-sdk/"><img src="https://img.shields.io/pypi/v/subconscious-sdk.svg" alt="PyPI version"></a>
-  <a href="https://pypi.org/project/subconscious-sdk/"><img src="https://img.shields.io/pypi/dm/subconscious-sdk.svg" alt="PyPI downloads"></a>
-  <a href="https://docs.subconscious.dev"><img src="https://img.shields.io/badge/docs-subconscious.dev-blue" alt="docs"></a>
-  <img src="https://img.shields.io/badge/python-%3E%3D3.8-brightgreen" alt="python version">
-  <a href="https://github.com/subconscious-systems/subconscious-sdk"><img src="https://img.shields.io/pypi/l/subconscious-sdk.svg" alt="license"></a>
 </p>
 
 ---
@@ -21,272 +13,194 @@
 ## Installation
 
 ```bash
-pip install subconscious-python
-# or
-uv add subconscious-python
-# or
-poetry add subconscious-python
+pip install subconscious-sdk
 ```
 
-> **Note**: The package name is `subconscious-python` but you import it as `subconscious`.
-
-## Quick Start
+## Quick start
 
 ```python
-from subconscious import Subconscious
+from subconscious import Subconscious, tools
+from pydantic import BaseModel
 
-client = Subconscious(api_key="your-api-key")
+client = Subconscious(api_key="...")
 
-run = client.run(
-    engine="tim-large",
+class Summary(BaseModel):
+    summary: str
+    score: float
+
+run = client.run_and_wait(
+    engine="tim-claude",
     input={
-        "instructions": "Search for the latest AI news and summarize the top 3 stories",
-        "tools": [{"type": "platform", "id": "parallel_search"}],
+        "instructions": "Summarize and score this article: …",
+        "tools": [tools.platform("parallel_search")],
+        "answerFormat": Summary,  # Pydantic class — auto-converted
     },
-    options={"await_completion": True},
 )
 
 print(run.result.answer)
 ```
 
-## Get Your API Key
+## Three ways to start a run
 
-Create an API key in the [Subconscious dashboard](https://www.subconscious.dev/platform).
+### 1. Fire-and-forget — `client.run`
 
-## Usage
-
-### Run and Wait
-
-The simplest way to use the SDK—create a run and wait for completion:
+Returns the run with only `run_id` populated. Use this when a background
+worker polls or when you've persisted the id and pick it up later.
 
 ```python
-run = client.run(
-    engine="tim-large",
-    input={
-        "instructions": "Analyze the latest trends in renewable energy",
-        "tools": [{"type": "platform", "id": "parallel_search"}],
-    },
-    options={"await_completion": True},
-)
+run = client.run(engine="tim-claude", input={"instructions": "Search AI news"})
+db.insert({"run_id": run.run_id, "status": "queued"})
+```
 
+### 2. Block until done — `client.run_and_wait`
+
+```python
+run = client.run_and_wait(engine="tim-claude", input={"instructions": "Search AI news"})
 print(run.result.answer)
-print(run.result.reasoning)  # Structured reasoning nodes
 ```
 
-### Fire and Forget
+### 3. Stream — `client.stream`
 
-Start a run without waiting, then check status later:
-
-```python
-run = client.run(
-    engine="tim-large",
-    input={
-        "instructions": "Generate a comprehensive report",
-        "tools": [],
-    },
-)
-
-print(f"Run started: {run.run_id}")
-
-# Check status later
-status = client.get(run.run_id)
-print(status.status)  # 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled' | 'timed_out'
-```
-
-### Poll with Custom Options
+Yields typed events. The first event is always `StartedEvent`
+(carrying `run_id`); the last is always `DoneEvent`. Exactly one
+`ResultEvent` (success) or `ErrorEvent` (failure) fires before `done`.
 
 ```python
-run = client.run(
-    engine="tim-large",
-    input={
-        "instructions": "Complex task",
-        "tools": [{"type": "platform", "id": "parallel_search"}],
-    },
+from subconscious.types import (
+    DeltaEvent, StartedEvent, ResultEvent, ToolCallEvent, ErrorEvent,
 )
 
-# Wait with custom polling options
-result = client.wait(
-    run.run_id,
-    options={
-        "interval_ms": 2000,  # Poll every 2 seconds
-        "max_attempts": 60,   # Give up after 60 attempts
-    },
-)
-```
-
-### Streaming (Text Deltas)
-
-Stream text as it's generated:
-
-```python
-for event in client.stream(
-    engine="tim-large",
-    input={
-        "instructions": "Write a short essay about space exploration",
-        "tools": [{"type": "platform", "id": "parallel_search"}],
-    },
-):
-    if event.type == "delta":
+for event in client.stream(engine="tim-claude", input={"instructions": "Write an essay"}):
+    if isinstance(event, StartedEvent):
+        print("run_id:", event.run_id)
+    elif isinstance(event, DeltaEvent):
         print(event.content, end="", flush=True)
-    elif event.type == "done":
-        print(f"\n\nRun completed: {event.run_id}")
-    elif event.type == "error":
-        print(f"Error: {event.message}")
+    elif isinstance(event, ToolCallEvent):
+        print(f"\ntool: {event.call.tool_name} {event.call.parameters}")
+    elif isinstance(event, ResultEvent):
+        print("\nfinal answer:", event.result.answer)
+    elif isinstance(event, ErrorEvent):
+        print(f"[{event.code}] {event.message}")
 ```
 
-> **Note**: Rich streaming events (reasoning steps, tool calls) are coming soon. Currently, the stream provides text deltas as they're generated.
+## Re-attaching to a run — `client.observe`
 
-### Structured Output
+Pick up a live or already-finished run and stream its events from the
+durable buffer. Same wire format and event taxonomy as `stream()`.
 
-Get responses in a specific JSON schema format using Pydantic models:
+```python
+run = client.run(engine="tim-claude", input=...)
+db.persist(run.run_id)
+
+# … later, possibly in a different process:
+for event in client.observe(run.run_id):
+    if isinstance(event, ResultEvent):
+        print(event.result.answer)
+```
+
+## Tools
+
+```python
+from subconscious import tools
+from pydantic import BaseModel
+
+class EmailArgs(BaseModel):
+    to: str
+    body: str
+
+input = {
+    "instructions": "Look up customers and send a follow-up email",
+    "tools": [
+        tools.platform("parallel_search"),
+        tools.resource("sandbox"),
+        tools.function(
+            name="sendEmail",
+            url="https://api.example.com/email",
+            parameters=EmailArgs,             # Pydantic class — auto-converted
+            defaults={"sender_id": "svc_abc"},  # hidden from model, auto-promoted
+            headers={"Authorization": "Bearer xyz"},
+        ),
+        tools.mcp(
+            url="https://mcp.example.com",
+            headers={"Authorization": "Bearer xyz"},  # header-based auth
+        ),
+    ],
+}
+```
+
+### Client-level FunctionTool overlays
+
+```python
+client = Subconscious(
+    api_key="...",
+    default_function_tool_headers={"Authorization": "Bearer xyz"},
+    default_function_tool_defaults={"tenant_id": "t_abc"},
+)
+```
+
+Per-tool values win on conflict.
+
+## Structured output
+
+Pass a Pydantic class directly — the SDK converts it for you:
 
 ```python
 from pydantic import BaseModel
-from subconscious import Subconscious
 
-class AnalysisResult(BaseModel):
+class Result(BaseModel):
     summary: str
-    key_points: list[str]
-    sentiment: str
+    score: float
 
-client = Subconscious(api_key="your-api-key")
-
-run = client.run(
-    engine="tim-large",
+run = client.run_and_wait(
+    engine="tim-claude",
     input={
-        "instructions": "Analyze the latest news about electric vehicles",
-        "tools": [{"type": "platform", "id": "parallel_search"}],
-        "answerFormat": AnalysisResult,  # Pass the Pydantic class directly
+        "instructions": "Rate this article",
+        "answerFormat": Result,
     },
-    options={"await_completion": True},
 )
 
-# The answer will conform to your schema
-print(run.result.answer)  # JSON string matching AnalysisResult
+print(run.result.answer)  # already a dict matching Result; cast if needed
 ```
 
-The SDK automatically converts your Pydantic model to JSON Schema. You can also pass a raw JSON Schema dict if preferred.
+You can still pass a hand-built JSON Schema dict if you'd rather not
+depend on Pydantic.
 
-For advanced use cases, you can also specify a `reasoningFormat` to structure the agent's reasoning output.
+## Cancelling a run
 
-### Tools
+`client.cancel(run_id)` is **idempotent**. Call it whether the run is
+running, queued, or already terminal — it returns the run's current
+shape. Only network / auth failures raise.
 
 ```python
-# Platform tools (hosted by Subconscious)
-parallel_search = {
-    "type": "platform",
-    "id": "parallel_search",
-}
-
-# Function tools (your own functions)
-custom_function = {
-    "type": "function",
-    "name": "get_weather",
-    "description": "Get current weather for a location",
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "location": {"type": "string"},
-        },
-        "required": ["location"],
-    },
-    "url": "https://api.example.com/weather",
-    "method": "GET",
-    "timeout": 30,
-}
-
-# MCP tools
-mcp_tool = {
-    "type": "mcp",
-    "url": "https://mcp.example.com",
-    "allow": ["read", "write"],
-}
+run = client.run(engine="tim-claude", input=...)
+client.cancel(run.run_id)  # safe regardless of state
+client.cancel(run.run_id)  # also safe
 ```
 
-### Error Handling
+## Error codes
 
-```python
-from subconscious import (
-    Subconscious,
-    SubconsciousError,
-    AuthenticationError,
-    RateLimitError,
-)
+Every `ErrorEvent` and every raised `SubconsciousError` carries a
+canonical `code` from this set:
 
-try:
-    run = client.run(...)
-except AuthenticationError:
-    print("Invalid API key")
-except RateLimitError:
-    print("Rate limited, retry later")
-except SubconsciousError as e:
-    print(f"API error: {e.code} - {e}")
+```
+invalid_request  authentication_failed  permission_denied
+not_found        rate_limited           internal_error
+service_unavailable  timeout            cancelled
 ```
 
-### Cancellation
+Pattern-match on `code`, never on `message`.
 
-```python
-# Cancel a running run
-client.cancel(run.run_id)
-```
+## Engines
 
-## API Reference
+The SDK accepts any engine name as a string. Canonical live names:
 
-### `Subconscious`
+- `tim`, `tim-edge`
+- `tim-claude`, `tim-claude-heavy`
+- `tim-omni`, `tim-omni-mini`
 
-The main client class.
-
-#### Constructor Options
-
-| Option     | Type   | Required | Default                           |
-| ---------- | ------ | -------- | --------------------------------- |
-| `api_key`  | `str`  | Yes      | -                                 |
-| `base_url` | `str`  | No       | `https://api.subconscious.dev/v1` |
-
-#### Methods
-
-| Method                      | Description              |
-| --------------------------- | ------------------------ |
-| `run(engine, input, options)` | Create a new run       |
-| `stream(engine, input)`     | Stream text deltas       |
-| `get(run_id)`               | Get run status           |
-| `wait(run_id, options)`     | Poll until completion    |
-| `cancel(run_id)`            | Cancel a running run     |
-
-### Engines
-
-| Engine              | Type     | Availability | Description                                                       |
-| ------------------- | -------- | ------------ | ----------------------------------------------------------------- |
-| `tim-small-preview` | Unified  | Available    | Fast and tuned for search tasks                                   |
-| `tim-large`         | Compound | Available    | Generalized reasoning engine backed by the power of OpenAI        |
-| `timini`            | Compound | Coming soon  | Generalized reasoning engine backed by the power of Google Gemini |
-
-### Run Status
-
-| Status      | Description            |
-| ----------- | ---------------------- |
-| `queued`    | Waiting to start       |
-| `running`   | Currently executing    |
-| `succeeded` | Completed successfully |
-| `failed`    | Encountered an error   |
-| `canceled`  | Manually canceled      |
-| `timed_out` | Exceeded time limit    |
-
-## Requirements
-
-- Python ≥ 3.8
-- requests
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a pull request.
+Legacy names (`tim-large`, `tim-gpt`, `tim-small`, `timini`, …) are still
+accepted and resolved to a live engine server-side.
 
 ## License
 
-Apache-2.0
-
-## Support
-
-For support and questions:
-- Documentation: https://docs.subconscious.dev
-- Email: {hongyin,jack}@subconscious.dev
+Apache-2.0. See `LICENSE`.

@@ -1,11 +1,13 @@
-"""Subconscious API client."""
+"""Subconscious API client (1.0)."""
 
 import json
 import time
+from dataclasses import asdict, is_dataclass
 from typing import Any, Dict, Generator, List, Optional, Union
 
 import requests
 
+from ._normalize_tools import normalize_tools
 from .errors import raise_for_status
 from .types import (
     DeltaEvent,
@@ -13,14 +15,17 @@ from .types import (
     Engine,
     ErrorEvent,
     PollOptions,
+    ReasoningNode,
+    ReasoningNodeEvent,
+    ResultEvent,
     Run,
     RunInput,
-    RunOptions,
-    RunParams,
     RunResult,
     RunStatus,
+    StartedEvent,
     StreamEvent,
-    Tool,
+    ToolCallEvent,
+    ToolUse,
     Usage,
 )
 
@@ -28,68 +33,92 @@ from .types import (
 def _resolve_schema(schema: Any) -> Optional[Dict[str, Any]]:
     """
     Resolve a schema to a JSON Schema dict.
-    
+
     Accepts:
-    - A Pydantic BaseModel class (calls model_json_schema() automatically)
+    - A Pydantic BaseModel class (calls model_json_schema() automatically) (R13)
     - A dict (passed through as-is)
     - None (returns None)
     """
     if schema is None:
         return None
-    
-    # Check if it's a Pydantic model class
+
     if isinstance(schema, type) and hasattr(schema, "model_json_schema"):
         return schema.model_json_schema()
-    
-    # Already a dict
+
     if isinstance(schema, dict):
         return schema
-    
-    # Unknown type - try to use it as-is
+
     return schema
 
-TERMINAL_STATUSES: List[RunStatus] = ["succeeded", "failed", "canceled", "timed_out"]
+
+TERMINAL_STATUSES: List[RunStatus] = [
+    "succeeded",
+    "failed",
+    "canceled",
+    "timed_out",
+]
 
 
 class Subconscious:
-    """
-    The main Subconscious API client.
+    """The main Subconscious API client.
 
-    Example:
-        ```python
-        from subconscious import Subconscious
+    Example::
 
-        client = Subconscious(api_key="your-api-key")
+        from subconscious import Subconscious, tools
 
+        client = Subconscious(api_key="...")
+
+        # Fire-and-forget (R18):
         run = client.run(
-            engine="tim-large",
-            input={
-                "instructions": "Search for the latest news about AI",
-                "tools": [{"type": "platform", "id": "parallel_search"}],
-            },
-            options={"await_completion": True},
+            engine="tim-claude",
+            input={"instructions": "Search AI news"},
         )
 
+        # Block until done (R18, R10):
+        run = client.run_and_wait(
+            engine="tim-claude",
+            input={
+                "instructions": "Summarize this article…",
+                "answerFormat": SummarySchema,  # Pydantic class — auto-converted (R13)
+            },
+        )
         print(run.result.answer)
-        ```
+
+        # Stream:
+        for event in client.stream(engine="tim-claude", input=...):
+            if event.type == "started":  print("runId:", event.run_id)
+            if event.type == "delta":    print(event.content, end="")
+            if event.type == "result":   print("answer:", event.result.answer)
     """
 
     def __init__(
         self,
         api_key: str,
         base_url: str = "https://api.subconscious.dev/v1",
+        *,
+        default_function_tool_headers: Optional[Dict[str, str]] = None,
+        default_function_tool_defaults: Optional[Dict[str, Any]] = None,
     ):
         """
         Initialize the Subconscious client.
 
         Args:
-            api_key: Your Subconscious API key
-            base_url: API base URL (default: https://api.subconscious.dev/v1)
+            api_key: Your Subconscious API key.
+            base_url: API base URL.
+            default_function_tool_headers: Headers merged into every
+                FunctionTool dispatch. Use this for cross-cutting auth
+                instead of duplicating ``headers`` on every function tool.
+                Per-tool values win on conflict. (R9.)
+            default_function_tool_defaults: Hidden parameter values merged
+                into every FunctionTool's ``defaults``. Per-tool values
+                win on conflict. (R9.)
         """
         if not api_key:
             raise ValueError("api_key is required")
         self._api_key = api_key
         self._base_url = base_url.rstrip("/")
+        self._default_function_tool_headers = default_function_tool_headers
+        self._default_function_tool_defaults = default_function_tool_defaults
 
     def _headers(self) -> Dict[str, str]:
         """Get default request headers."""
@@ -104,7 +133,6 @@ class Subconscious:
         path: str,
         json_data: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """Make an HTTP request to the API."""
         url = f"{self._base_url}{path}"
         response = requests.request(
             method=method,
@@ -115,104 +143,86 @@ class Subconscious:
         raise_for_status(response)
         return response.json()
 
-    def run(
+    # ------------------------------------------------------------------
+    # Internal: build POST /v1/runs body
+    # ------------------------------------------------------------------
+
+    def _build_create_body(
         self,
         engine: Engine,
         input: Union[RunInput, Dict[str, Any]],
-        options: Optional[Union[RunOptions, Dict[str, Any]]] = None,
-    ) -> Run:
-        """
-        Create a new run.
-
-        Args:
-            engine: The engine to use ("tim-large" or "tim-small-preview")
-            input: Input configuration with instructions, tools, and optional answer/reasoning formats
-            options: Optional run options (await_completion, etc.)
-
-        Returns:
-            The created run, with results if await_completion is True
-
-        Example:
-            ```python
-            from pydantic import BaseModel
-            
-            class Result(BaseModel):
-                answer: str
-                confidence: float
-            
-            run = client.run(
-                engine="tim-large",
-                input={
-                    "instructions": "Search for AI news",
-                    "tools": [{"type": "platform", "id": "parallel_search"}],
-                    "answerFormat": Result,  # Pass the Pydantic class directly
-                },
-                options={"await_completion": True},
-            )
-            ```
-        """
-        # Normalize input
+    ) -> Dict[str, Any]:
         if isinstance(input, RunInput):
             input_dict: Dict[str, Any] = {
                 "instructions": input.instructions,
-                "tools": input.tools,
             }
+            if input.tools is not None:
+                input_dict["tools"] = input.tools
+            if input.images is not None:
+                input_dict["images"] = input.images
+            if input.resources is not None:
+                input_dict["resources"] = input.resources
+            if input.skills is not None:
+                input_dict["skills"] = input.skills
+            if input.agent_id is not None:
+                input_dict["agentId"] = input.agent_id
             if input.answer_format is not None:
                 input_dict["answerFormat"] = _resolve_schema(input.answer_format)
             if input.reasoning_format is not None:
                 input_dict["reasoningFormat"] = _resolve_schema(input.reasoning_format)
         else:
-            input_dict = dict(input)  # Make a copy to avoid mutating
-            # Resolve Pydantic models to JSON Schema
+            input_dict = dict(input)
             if "answerFormat" in input_dict:
                 input_dict["answerFormat"] = _resolve_schema(input_dict["answerFormat"])
             if "reasoningFormat" in input_dict:
-                input_dict["reasoningFormat"] = _resolve_schema(input_dict["reasoningFormat"])
-
-        # Normalize tools to dicts
-        tools = input_dict.get("tools", [])
-        normalized_tools = []
-        for tool in tools:
-            if hasattr(tool, "__dict__"):
-                normalized_tools.append(
-                    {k: v for k, v in tool.__dict__.items() if v is not None}
+                input_dict["reasoningFormat"] = _resolve_schema(
+                    input_dict["reasoningFormat"]
                 )
-            else:
-                normalized_tools.append(tool)
-        input_dict["tools"] = normalized_tools
+            # Camel-case agent id alias for ergonomic snake-case dict callers.
+            if "agent_id" in input_dict and "agentId" not in input_dict:
+                input_dict["agentId"] = input_dict.pop("agent_id")
 
-        # Make request
-        data = self._request(
-            "POST",
-            "/runs",
-            {"engine": engine, "input": input_dict},
-        )
+        # Normalize tools (apply R9 overlays + R12 defaults promotion).
+        if "tools" in input_dict:
+            input_dict["tools"] = normalize_tools(
+                input_dict.get("tools"),
+                default_function_tool_headers=self._default_function_tool_headers,
+                default_function_tool_defaults=self._default_function_tool_defaults,
+            )
 
-        run_id = data["runId"]
+        return {"engine": engine, "input": input_dict}
 
-        # Check if we should wait for completion
-        await_completion = False
-        if options:
-            if isinstance(options, RunOptions):
-                await_completion = options.await_completion
-            elif isinstance(options, dict):
-                await_completion = options.get("await_completion", False)
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
 
-        if not await_completion:
-            return Run(run_id=run_id)
+    def run(
+        self,
+        engine: Engine,
+        input: Union[RunInput, Dict[str, Any]],
+    ) -> Run:
+        """Create a run and return its ``run_id`` immediately. Fire-and-forget.
 
-        return self.wait(run_id)
+        Use :py:meth:`run_and_wait` if you want to block until the run reaches
+        a terminal state. (R18.)
+        """
+        body = self._build_create_body(engine, input)
+        data = self._request("POST", "/runs", body)
+        return Run(run_id=data["runId"])
+
+    def run_and_wait(
+        self,
+        engine: Engine,
+        input: Union[RunInput, Dict[str, Any]],
+        *,
+        poll_options: Optional[Union[PollOptions, Dict[str, Any]]] = None,
+    ) -> Run:
+        """Create a run and poll until it reaches a terminal state. (R18.)"""
+        run = self.run(engine, input)
+        return self.wait(run.run_id, poll_options)
 
     def get(self, run_id: str) -> Run:
-        """
-        Get the current state of a run.
-
-        Args:
-            run_id: The ID of the run to retrieve
-
-        Returns:
-            The run with its current status and result (if completed)
-        """
+        """Get the current state of a run."""
         data = self._request("GET", f"/runs/{run_id}")
         return self._parse_run(data)
 
@@ -221,30 +231,9 @@ class Subconscious:
         run_id: str,
         options: Optional[Union[PollOptions, Dict[str, Any]]] = None,
     ) -> Run:
-        """
-        Wait for a run to complete by polling.
-
-        Args:
-            run_id: The ID of the run to wait for
-            options: Polling options (interval_ms, max_attempts)
-
-        Returns:
-            The completed run
-
-        Raises:
-            TimeoutError: If max_attempts is exceeded
-
-        Example:
-            ```python
-            run = client.wait(
-                run_id,
-                options={"interval_ms": 2000, "max_attempts": 60},
-            )
-            ```
-        """
-        # Normalize options
+        """Wait for a run to complete by polling."""
         interval_ms = 1000
-        max_attempts = None
+        max_attempts: Optional[int] = None
         if options:
             if isinstance(options, PollOptions):
                 interval_ms = options.interval_ms
@@ -262,95 +251,42 @@ class Subconscious:
 
             attempts += 1
             if max_attempts is not None and attempts >= max_attempts:
-                raise TimeoutError(f"Polling exceeded max attempts ({max_attempts})")
+                raise TimeoutError(
+                    f"Polling exceeded max attempts ({max_attempts})"
+                )
 
             time.sleep(interval_ms / 1000)
 
     def cancel(self, run_id: str) -> Run:
-        """
-        Cancel a running run.
+        """Cancel a run.
 
-        Args:
-            run_id: The ID of the run to cancel
-
-        Returns:
-            The canceled run
+        **Idempotent** (R9). Callers may invoke this against a run in any
+        state (running, queued, already terminal) and receive the run's
+        current shape with a 200 response. Already-cancelled or already-
+        succeeded runs are returned unchanged with their existing status,
+        so you do not need to wrap this in ``try/except`` for the common
+        case. Errors are only raised for network/auth failures.
         """
         data = self._request("POST", f"/runs/{run_id}/cancel")
         return self._parse_run(data)
+
+    # ------------------------------------------------------------------
+    # Streaming
+    # ------------------------------------------------------------------
 
     def stream(
         self,
         engine: Engine,
         input: Union[RunInput, Dict[str, Any]],
     ) -> Generator[StreamEvent, None, Optional[Run]]:
+        """Create a streaming run and yield typed events.
+
+        Stream Events v2 (R8, R15) — yields ``StartedEvent`` first,
+        then any number of ``DeltaEvent`` / ``ReasoningNodeEvent`` /
+        ``ToolCallEvent`` events, exactly one of ``ResultEvent`` (success)
+        or ``ErrorEvent`` (failure), then ``DoneEvent`` last.
         """
-        Create a streaming run that yields text deltas as they arrive.
-
-        Args:
-            engine: The engine to use
-            input: Input configuration with instructions, tools, and optional answer/reasoning formats
-
-        Yields:
-            StreamEvent: Delta, done, or error events
-
-        Returns:
-            The final run (if stream completes successfully)
-
-        Example:
-            ```python
-            from pydantic import BaseModel
-            
-            class Result(BaseModel):
-                summary: str
-            
-            for event in client.stream(
-                engine="tim-large",
-                input={
-                    "instructions": "Write an essay",
-                    "tools": [],
-                    "answerFormat": Result,  # Pass the Pydantic class directly
-                },
-            ):
-                if event.type == "delta":
-                    print(event.content, end="", flush=True)
-                elif event.type == "done":
-                    print("\\nDone!")
-            ```
-
-        Note:
-            Rich streaming events (reasoning steps, tool calls) are coming soon.
-            Currently provides text deltas only.
-        """
-        # Normalize input
-        if isinstance(input, RunInput):
-            input_dict: Dict[str, Any] = {
-                "instructions": input.instructions,
-                "tools": input.tools,
-            }
-            if input.answer_format is not None:
-                input_dict["answerFormat"] = _resolve_schema(input.answer_format)
-            if input.reasoning_format is not None:
-                input_dict["reasoningFormat"] = _resolve_schema(input.reasoning_format)
-        else:
-            input_dict = dict(input)  # Make a copy to avoid mutating
-            # Resolve Pydantic models to JSON Schema
-            if "answerFormat" in input_dict:
-                input_dict["answerFormat"] = _resolve_schema(input_dict["answerFormat"])
-            if "reasoningFormat" in input_dict:
-                input_dict["reasoningFormat"] = _resolve_schema(input_dict["reasoningFormat"])
-
-        # Normalize tools
-        tools = input_dict.get("tools", [])
-        normalized_tools = []
-        for tool in tools:
-            if hasattr(tool, "__dict__"):
-                normalized_tools.append(
-                    {k: v for k, v in tool.__dict__.items() if v is not None}
-                )
-            else:
-                normalized_tools.append(tool)
-        input_dict["tools"] = normalized_tools
+        body = self._build_create_body(engine, input)
 
         url = f"{self._base_url}/runs/stream"
         headers = {
@@ -361,85 +297,205 @@ class Subconscious:
         response = requests.post(
             url,
             headers=headers,
-            json={"engine": engine, "input": input_dict},
+            json=body,
             stream=True,
         )
         raise_for_status(response)
 
-        run_id = response.headers.get("x-run-id", "")
-        is_error = False
+        header_run_id = response.headers.get("x-run-id", "")
+        # R8: emit `started` synchronously the moment we have a runId, even
+        # before the first server frame.
+        emitted_started_runid: Optional[str] = None
+        if header_run_id:
+            yield StartedEvent(run_id=header_run_id)
+            emitted_started_runid = header_run_id
 
-        for line in response.iter_lines(decode_unicode=True):
-            if not line:
+        run_id = header_run_id
+
+        for event in self._iter_sse_events(response, run_id):
+            # Skip a duplicate `started` event for the same id we already synthesized.
+            if (
+                isinstance(event, StartedEvent)
+                and event.run_id == emitted_started_runid
+            ):
                 continue
-
-            line = line.strip()
-
-            # Skip heartbeat comments
-            if line.startswith(":"):
-                continue
-
-            # Handle event type markers
-            if line.startswith("event:"):
-                event_type = line[6:].strip()
-                is_error = event_type == "error"
-                continue
-
-            # Handle data lines
-            if line.startswith("data:"):
-                data_content = line[5:].strip()
-
-                # Stream end
-                if data_content == "[DONE]":
-                    yield DoneEvent(type="done", run_id=run_id)
-                    continue
-
-                try:
-                    payload = json.loads(data_content)
-
-                    # Meta event with run_id
-                    if "run_id" in payload:
-                        run_id = payload["run_id"]
-                        continue
-
-                    # Error event
-                    if is_error or "error" in payload:
-                        yield ErrorEvent(
-                            type="error",
-                            run_id=run_id,
-                            message=payload.get("details") or payload.get("error", "Unknown error"),
-                            code=payload.get("code"),
-                        )
-                        is_error = False
-                        continue
-
-                    # OpenAI-compatible chunk with text delta
-                    choices = payload.get("choices", [])
-                    if choices:
-                        content = choices[0].get("delta", {}).get("content")
-                        if content:
-                            yield DeltaEvent(type="delta", run_id=run_id, content=content)
-
-                except json.JSONDecodeError:
-                    pass
+            if isinstance(event, StartedEvent):
+                emitted_started_runid = event.run_id
+                run_id = event.run_id
+            yield event
 
         return Run(run_id=run_id, status="succeeded") if run_id else None
 
+    def observe(
+        self,
+        run_id: str,
+    ) -> Generator[StreamEvent, None, Optional[Run]]:
+        """Re-attach to an in-flight (or finished) run and stream its events. (R16.)
+
+        Same wire format and event taxonomy as :py:meth:`stream`. Useful
+        when a parent process restarts and needs to resume an existing
+        run.
+
+        Example::
+
+            run = client.run(engine="tim-claude", input=...)
+            persist_to_db(run.run_id)
+            # … later, possibly in a different process …
+            for event in client.observe(run.run_id):
+                handle(event)
+        """
+        url = f"{self._base_url}/runs/{run_id}/stream"
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Accept": "text/event-stream",
+        }
+
+        response = requests.get(url, headers=headers, stream=True)
+        raise_for_status(response)
+
+        for event in self._iter_sse_events(response, run_id):
+            yield event
+
+        return Run(run_id=run_id, status="succeeded") if run_id else None
+
+    # ------------------------------------------------------------------
+    # SSE parsing
+    # ------------------------------------------------------------------
+
+    def _iter_sse_events(
+        self,
+        response: requests.Response,
+        run_id: str,
+    ) -> Generator[StreamEvent, None, None]:
+        """Parse a chunked SSE response into typed StreamEvent values."""
+        pending_event: Optional[str] = None
+
+        for raw_line in response.iter_lines(decode_unicode=True):
+            if raw_line is None:
+                continue
+            line = raw_line  # already decoded
+            if not line:
+                pending_event = None
+                continue
+
+            if line.startswith(":"):
+                # Heartbeat / comment.
+                continue
+
+            if line.startswith("event:"):
+                pending_event = line[6:].strip()
+                continue
+
+            if not line.startswith("data:"):
+                continue
+            data_content = line[5:].strip()
+
+            if data_content == "[DONE]":
+                yield DoneEvent(run_id=run_id)
+                pending_event = None
+                continue
+
+            try:
+                payload = json.loads(data_content)
+            except json.JSONDecodeError:
+                continue
+
+            event = self._parse_sse_payload(pending_event, payload, run_id)
+            if event is None:
+                continue
+
+            # Update tracked run_id from `started` events.
+            if isinstance(event, StartedEvent):
+                run_id = event.run_id
+            yield event
+
+    def _parse_sse_payload(
+        self,
+        event_tag: Optional[str],
+        payload: Dict[str, Any],
+        run_id: str,
+    ) -> Optional[StreamEvent]:
+        if event_tag in ("started", "meta"):
+            new_id = payload.get("run_id") or payload.get("runId") or run_id
+            if not new_id:
+                return None
+            return StartedEvent(run_id=new_id)
+
+        if event_tag == "reasoning_node":
+            node_data = payload.get("node", payload)
+            return ReasoningNodeEvent(run_id=run_id, node=_parse_reasoning_node(node_data))
+
+        if event_tag == "tool_call":
+            call_data = payload.get("call", payload)
+            return ToolCallEvent(run_id=run_id, call=_parse_tool_use(call_data))
+
+        if event_tag == "result":
+            result_data = payload.get("result", payload)
+            usage_data = payload.get("usage")
+            result = RunResult(
+                answer=result_data.get("answer"),
+                reasoning=_parse_reasoning_list(result_data.get("reasoning")),
+            )
+            usage = (
+                Usage(
+                    input_tokens=usage_data.get("inputTokens", 0),
+                    output_tokens=usage_data.get("outputTokens", 0),
+                )
+                if usage_data
+                else None
+            )
+            return ResultEvent(run_id=run_id, result=result, usage=usage)
+
+        if event_tag == "error":
+            return ErrorEvent(
+                run_id=run_id,
+                code=payload.get("code") or "internal_error",
+                message=(
+                    payload.get("message")
+                    or payload.get("details")
+                    or payload.get("error")
+                    or "Unknown error"
+                ),
+                details=payload.get("details") if isinstance(
+                    payload.get("details"), dict
+                )
+                else None,
+            )
+
+        # No event tag — OpenAI-compat delta chunk.
+        choices = payload.get("choices", [])
+        if choices:
+            content = choices[0].get("delta", {}).get("content")
+            if content:
+                return DeltaEvent(run_id=run_id, content=content)
+
+        # Bare `{"run_id": "…"}` frames (legacy meta) — synthesize started.
+        if "run_id" in payload:
+            return StartedEvent(run_id=payload["run_id"])
+
+        return None
+
+    # ------------------------------------------------------------------
+    # JSON → dataclass parsing
+    # ------------------------------------------------------------------
+
     def _parse_run(self, data: Dict[str, Any]) -> Run:
-        """Parse a run response from the API."""
         result = None
         if "result" in data and data["result"]:
+            r = data["result"]
             result = RunResult(
-                answer=data["result"].get("answer", ""),
-                reasoning=data["result"].get("reasoning"),
+                answer=r.get("answer", ""),
+                reasoning=_parse_reasoning_list(r.get("reasoning")),
             )
 
         usage = None
         if "usage" in data and data["usage"]:
-            usage = Usage(
-                models=data["usage"].get("models", []),
-                platform_tools=data["usage"].get("platformTools", []),
-            )
+            u = data["usage"]
+            if isinstance(u, dict) and ("inputTokens" in u or "input_tokens" in u):
+                usage = Usage(
+                    input_tokens=u.get("inputTokens", u.get("input_tokens", 0)),
+                    output_tokens=u.get("outputTokens", u.get("output_tokens", 0)),
+                )
 
         return Run(
             run_id=data.get("runId", data.get("run_id", "")),
@@ -447,3 +503,41 @@ class Subconscious:
             result=result,
             usage=usage,
         )
+
+
+# ---------------------------------------------------------------------------
+# Module-level helpers
+# ---------------------------------------------------------------------------
+
+
+def _parse_tool_use(data: Any) -> Optional[ToolUse]:
+    if not isinstance(data, dict):
+        return None
+    return ToolUse(
+        tool_name=data.get("tool_name") or data.get("name") or "",
+        parameters=data.get("parameters"),
+        tool_result=data.get("tool_result"),
+    )
+
+
+def _parse_reasoning_node(data: Any) -> Optional[ReasoningNode]:
+    if not isinstance(data, dict):
+        return None
+    return ReasoningNode(
+        title=data.get("title", ""),
+        thought=data.get("thought", ""),
+        tooluse=_parse_tool_use(data.get("tooluse")),
+        subtasks=_parse_reasoning_list(data.get("subtasks")) or [],
+        conclusion=data.get("conclusion", ""),
+    )
+
+
+def _parse_reasoning_list(data: Any) -> Optional[List[ReasoningNode]]:
+    if not isinstance(data, list):
+        return None
+    out: List[ReasoningNode] = []
+    for item in data:
+        node = _parse_reasoning_node(item)
+        if node is not None:
+            out.append(node)
+    return out
