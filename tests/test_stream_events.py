@@ -1,9 +1,9 @@
 """Tests for Stream Events v2 parsing in the Python SDK (R5, R8, R15, R16)."""
 
-from typing import List
+from typing import Generator, List, Optional, Tuple
 from unittest.mock import patch
 
-from subconscious import Subconscious, StreamEvent
+from subconscious import Run, Subconscious, StreamEvent
 from subconscious.types import (
     DeltaEvent,
     DoneEvent,
@@ -38,6 +38,17 @@ def _frames_to_lines(frames: List[str]) -> List[str]:
         for line in f.split("\n"):
             out.append(line)
     return out
+
+
+def _consume_with_return(
+    stream: Generator[StreamEvent, None, Optional[Run]]
+) -> Tuple[List[StreamEvent], Optional[Run]]:
+    events: List[StreamEvent] = []
+    while True:
+        try:
+            events.append(next(stream))
+        except StopIteration as exc:
+            return events, exc.value
 
 
 def test_stream_emits_started_first_R8():
@@ -159,6 +170,50 @@ def test_stream_parses_error_with_required_code_R5():
     assert err.code == "rate_limited"
     assert err.message == "slow down"
     assert err.details == {"retryAfterMs": 1000}
+
+
+def test_stream_returns_failed_run_after_error_event():
+    frames = [
+        "event: started\ndata: {\"runId\":\"r_failed\"}\n\n",
+        "event: error\ndata: {\"code\":\"rate_limited\",\"message\":\"slow down\"}\n\n",
+        "data: [DONE]\n\n",
+    ]
+    fake = _FakeResponse(_frames_to_lines(frames), headers={"x-run-id": "r_failed"})
+
+    with patch("subconscious.client.requests.post", return_value=fake):
+        client = Subconscious(api_key="k")
+        _, returned = _consume_with_return(
+            client.stream(engine="tim-claude", input={"instructions": "hi"})
+        )
+
+    assert returned is not None
+    assert returned.run_id == "r_failed"
+    assert returned.status == "failed"
+
+
+def test_stream_returns_succeeded_run_with_result_and_usage():
+    frames = [
+        "event: started\ndata: {\"runId\":\"r_ok\"}\n\n",
+        "event: result\ndata: {\"result\":{\"answer\":\"42\",\"reasoning\":null},"
+        "\"usage\":{\"inputTokens\":1,\"outputTokens\":2}}\n\n",
+        "data: [DONE]\n\n",
+    ]
+    fake = _FakeResponse(_frames_to_lines(frames), headers={"x-run-id": "r_ok"})
+
+    with patch("subconscious.client.requests.post", return_value=fake):
+        client = Subconscious(api_key="k")
+        _, returned = _consume_with_return(
+            client.stream(engine="tim-claude", input={"instructions": "hi"})
+        )
+
+    assert returned is not None
+    assert returned.run_id == "r_ok"
+    assert returned.status == "succeeded"
+    assert returned.result is not None
+    assert returned.result.answer == "42"
+    assert returned.usage is not None
+    assert returned.usage.input_tokens == 1
+    assert returned.usage.output_tokens == 2
 
 
 def test_observe_reads_run_stream_endpoint_R16():

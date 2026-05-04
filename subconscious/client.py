@@ -61,6 +61,14 @@ def _await_completion_requested(options: Any) -> bool:
     return False
 
 
+def _status_from_error_code(code: str) -> RunStatus:
+    if code == "canceled":
+        return "canceled"
+    if code == "timeout":
+        return "timed_out"
+    return "failed"
+
+
 def _resolve_schema(schema: Any) -> Optional[Dict[str, Any]]:
     """
     Resolve a schema to a JSON Schema dict.
@@ -365,6 +373,9 @@ class Subconscious:
             emitted_started_runid = header_run_id
 
         run_id = header_run_id
+        terminal_status: Optional[RunStatus] = None
+        terminal_result: Optional[RunResult[Any]] = None
+        terminal_usage: Optional[Usage] = None
 
         for event in self._iter_sse_events(response, run_id):
             # Skip a duplicate `started` event for the same id we already synthesized.
@@ -376,9 +387,24 @@ class Subconscious:
             if isinstance(event, StartedEvent):
                 emitted_started_runid = event.run_id
                 run_id = event.run_id
+            elif isinstance(event, ResultEvent):
+                terminal_status = "succeeded"
+                terminal_result = event.result
+                terminal_usage = event.usage
+            elif isinstance(event, ErrorEvent):
+                terminal_status = _status_from_error_code(event.code)
             yield event
 
-        return Run(run_id=run_id, status="succeeded") if run_id else None
+        return (
+            Run(
+                run_id=run_id,
+                status=terminal_status,
+                result=terminal_result,
+                usage=terminal_usage,
+            )
+            if run_id
+            else None
+        )
 
     def observe(
         self,
@@ -407,10 +433,31 @@ class Subconscious:
         response = requests.get(url, headers=headers, stream=True)
         raise_for_status(response)
 
+        terminal_status: Optional[RunStatus] = None
+        terminal_result: Optional[RunResult[Any]] = None
+        terminal_usage: Optional[Usage] = None
+
         for event in self._iter_sse_events(response, run_id):
+            if isinstance(event, StartedEvent):
+                run_id = event.run_id
+            elif isinstance(event, ResultEvent):
+                terminal_status = "succeeded"
+                terminal_result = event.result
+                terminal_usage = event.usage
+            elif isinstance(event, ErrorEvent):
+                terminal_status = _status_from_error_code(event.code)
             yield event
 
-        return Run(run_id=run_id, status="succeeded") if run_id else None
+        return (
+            Run(
+                run_id=run_id,
+                status=terminal_status,
+                result=terminal_result,
+                usage=terminal_usage,
+            )
+            if run_id
+            else None
+        )
 
     # ------------------------------------------------------------------
     # SSE parsing
