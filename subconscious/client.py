@@ -89,7 +89,7 @@ class Subconscious:
     def __init__(
         self,
         api_key: str | None = None,
-        base_url: str = 'https://api.subconscious.dev/v1',
+        base_url: str = 'https://api-legacy.subconscious.dev/v1',
     ):
         """
         Initialize the Subconscious client.
@@ -97,7 +97,7 @@ class Subconscious:
         Args:
             api_key: Your Subconscious API key. If omitted, resolved from
                      SUBCONSCIOUS_API_KEY env var or ~/.subcon/config.json.
-            base_url: API base URL (default: https://api.subconscious.dev/v1)
+            base_url: API base URL (default: https://api-legacy.subconscious.dev/v1)
         """
         self._api_key = _resolve_api_key(api_key)
         self._base_url = base_url.rstrip('/')

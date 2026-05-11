@@ -482,7 +482,7 @@ run = client.run(
 **Org-wide subscriptions**: receive webhooks for all runs. Manage in the [dashboard](https://www.subconscious.dev/platform/webhooks) or via the API:
 
 ```bash
-curl -X POST https://api.subconscious.dev/v1/webhooks/subscriptions \
+curl -X POST https://api-legacy.subconscious.dev/v1/webhooks/subscriptions \
   -H "Authorization: Bearer $SUBCONSCIOUS_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
